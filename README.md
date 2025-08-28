@@ -5,13 +5,15 @@ A collection of security-focused smart contracts for access control and governan
 ## Components
 
 ### Access Control
-- **AccessControl**: Role-based permissions with enumerable role management
-- **Ownable**: Single-owner contracts with ownership transfer capability  
-- **PauserControl**: Emergency pause mechanism for contract operations
+- **Ownable**: Single owner supporting proxy-based upgrade patterns
+- **AccessControl**: Enumerated role-based permissions for granular function gating
+- **PauserControl**: Lightweight circuit breaker
 
 ### Governance Council
-- **GovernanceCouncil**: Weighted multi-signature voting with dual thresholds (quorum and fast-pass). Features a simple trust model where council members can propose and vote on critical protocol operations.
-- **Proposal Forwarder**: Extensible architecture with trusted proposal forwarder contracts that can create proposals on behalf of voters, enabling flexible and convenient governance workflows.
+- **GovernanceCouncil**: Weighted council governance with quorum/fast‑pass dual thresholds
+- **Proposal Forwarders**: Plug‑in helpers that build calldata and emit typed events for proposal creation
+
+*See [src/governance/README.md](src/governance/README.md) for detailed architecture and mechanics.*
 
 ## Structure
 
@@ -24,7 +26,7 @@ src/
 │   └── interfaces/               # Access control interfaces
 │
 └── governance/                 # Governance system contracts
-    ├── GovernanceCouncil.sol     # Multi-signature governance contract
+    ├── GovernanceCouncil.sol     # Multisig governance contract
     ├── IGovernanceCouncil.sol    # Governance council interface
     └── proposal-forwarders/      # Proposal forwarder contracts
 ```
