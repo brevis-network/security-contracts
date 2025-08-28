@@ -228,6 +228,37 @@ contract CouncilTest is Test {
         assertTrue(council.getVote(proposalId, voter1));
     }
 
+    function testProposalDataHashCorrectness() public {
+        bytes memory data = abi.encodeWithSelector(MockTarget.setValue.selector, 42);
+
+        vm.prank(voter1);
+        uint256 proposalId = council.createProposal(address(target), data);
+
+        // Verify the data hash is computed correctly
+        bytes32 expectedHash =
+            keccak256(abi.encodePacked(IGovernanceCouncil.ProposalType.External, address(target), data));
+
+        // Verify the proposal data hash matches expected
+        (bytes32 actualHash,) = council.proposals(proposalId);
+        assertEq(actualHash, expectedHash, "Proposal data hash should match expected computation");
+
+        // Also test other proposal types
+        vm.prank(voter1);
+        uint256 paramProposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, 3600);
+
+        bytes32 expectedParamHash = keccak256(
+            abi.encodePacked(
+                IGovernanceCouncil.ProposalType.ParamUpdate,
+                address(0),
+                abi.encode(IGovernanceCouncil.Param.ActivePeriod, 3600)
+            )
+        );
+
+        // Verify param proposal hash
+        (bytes32 actualParamHash,) = council.proposals(paramProposalId);
+        assertEq(actualParamHash, expectedParamHash, "Param update proposal hash should match expected computation");
+    }
+
     function testCreateExternalProposalInvalidSelector() public {
         bytes memory data = new bytes(2); // Too short
 

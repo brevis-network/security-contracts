@@ -23,6 +23,10 @@ contract CouncilExecutionTest is CouncilTest {
         // Check target state before execution
         assertEq(target.value(), 0);
 
+        // Expect event emission
+        vm.expectEmit(true, true, false, true);
+        emit IGovernanceCouncil.ExternalCallExecuted(address(target), MockTarget.setValue.selector);
+
         // Execute proposal
         vm.prank(voter1);
         council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
@@ -150,6 +154,7 @@ contract CouncilExecutionTest is CouncilTest {
 
     function testCreateAndExecuteParamUpdate() public {
         uint256 newActivePeriod = 10000;
+        uint256 oldActivePeriod = council.params(IGovernanceCouncil.Param.ActivePeriod);
 
         vm.prank(voter1);
         uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, newActivePeriod);
@@ -158,6 +163,11 @@ contract CouncilExecutionTest is CouncilTest {
         council.voteProposal(proposalId, true);
 
         bytes memory data = abi.encode(IGovernanceCouncil.Param.ActivePeriod, newActivePeriod);
+
+        // Expect ParamUpdated event
+        vm.expectEmit(true, false, false, true);
+        emit IGovernanceCouncil.ParamUpdated(IGovernanceCouncil.Param.ActivePeriod, oldActivePeriod, newActivePeriod);
+
         vm.prank(voter1);
         council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.ParamUpdate, address(0), data);
 
@@ -277,6 +287,13 @@ contract CouncilExecutionTest is CouncilTest {
         council.voteProposal(proposalId, true);
 
         bytes memory data = abi.encode(forwarders, authorized);
+
+        // Expect ProposalForwarderUpdated events
+        vm.expectEmit(true, false, false, true);
+        emit IGovernanceCouncil.ProposalForwarderUpdated(newForwarder, true);
+        vm.expectEmit(true, false, false, true);
+        emit IGovernanceCouncil.ProposalForwarderUpdated(forwarder1, false);
+
         vm.prank(voter1);
         council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.ProposalForwarderUpdate, address(0), data);
 

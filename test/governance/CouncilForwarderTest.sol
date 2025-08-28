@@ -375,4 +375,22 @@ contract CouncilForwarderTest is Test {
         vm.expectRevert(IGovernanceCouncil.InvalidProposalForwarder.selector);
         untrustedForwarder.proposeTransferOwnership(address(mockOwnable), newOwner);
     }
+
+    function testNonVoterCannotUseForwarder() public {
+        address nonVoter = makeAddr("nonVoter");
+
+        // Non-voter should not be able to use forwarder to create proposals
+        vm.prank(nonVoter);
+        vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
+        accessForwarder.proposeTransferOwnership(address(mockOwnable), makeAddr("newOwner"));
+
+        // Verify the same for other forwarder functions
+        vm.prank(nonVoter);
+        vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
+        accessForwarder.proposeGrantRole(address(mockAccessControl), bytes32("ADMIN"), nonVoter);
+
+        vm.prank(nonVoter);
+        vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
+        proxyForwarder.proposeUpgrade(address(mockProxyAdmin), makeAddr("newImplementation"));
+    }
 }
