@@ -1,18 +1,16 @@
 # Governance Test Suite
 
-This directory contains tests for the GovernanceCouncil system with **107 tests across 4 test files**.
+This directory contains tests for the GovernanceCouncil system with **110 tests across 4 test files**.
 
 ## Test Results Summary
-- **107 Tests Passed**
-- **0 Tests Failed**
-
-## Test Structure
+- **110 Tests Passed** 
+- **0 Tests Failed**## Test Structure
 
 ### Core Test Files
 - **`CouncilTest.sol`** - Foundation Tests (19 tests) - Basic functionality and setup
 - **`CouncilFastPassTest.sol`** - Fast-Pass System (30 tests) - Authorization system
 - **`CouncilExecutionTest.sol`** - Execution & Governance (41 tests) - Full workflow testing
-- **`CouncilForwarderTest.sol`** - Proposal Forwarder (17 tests) - Proposal forwarder contracts
+- **`CouncilForwarderTest.sol`** - Proposal Forwarder (20 tests) - Proposal forwarder contracts
 
 ## Test Coverage Analysis
 
