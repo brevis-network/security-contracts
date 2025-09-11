@@ -13,10 +13,14 @@ This test suite provides comprehensive coverage for the `PauserControl` contract
 
 ### Role Management Tests  
 - ✅ `testGrantPauserRole`: Tests granting PAUSER_ROLE and verifies role membership
-- ✅ `testGrantRoleUnauthorized`: Ensures only owner can grant roles
+- ✅ `testGrantRoleUnauthorized`: Ensures only owner or role admin can grant; non-admin rejected
 - ✅ `testRevokeRole`: Tests role revocation by owner
 - ✅ `testRenounceRole`: Tests self-renunciation of roles
 - ✅ `testMultiplePausers`: Tests multiple accounts with PAUSER_ROLE
+- ✅ `testSetRoleAdminOnlyOwner`: Only owner can set a role's admin; getter reflects it
+- ✅ `testRoleAdminCanGrantAndRevoke`: Role admin can manage its role members
+- ✅ `testOwnerCanGrantEvenWithRoleAdminSet`: Owner remains super-admin
+- ✅ `testClearingRoleAdminRestrictsToOwner`: Setting admin to zero enforces owner-only management
 
 ### Pause/Unpause Functionality
 - ✅ `testPauseUnpause`: Tests basic pause and unpause operations
@@ -37,8 +41,9 @@ This test suite provides comprehensive coverage for the `PauserControl` contract
 ## Key Features Tested
 1. **Role-based Access Control**: `PAUSER_ROLE` management and enforcement
 2. **Pausable Functionality**: Contract pause/unpause with proper access control  
-3. **Ownership Management**: Direct transfer and two-step ownership (`startOwnershipTransfer` → `acceptOwnership`), plus cancellation
-4. **Error Handling**: Clear custom errors for unauthorized/invalid operations
-5. **State Management**: Correct transitions, including clearing `pendingOwner` on ownership changes
+3. **Per-role Admin Model**: Owner is super-admin; optional per-role admin; zero admin = owner-only
+4. **Ownership Management**: Direct transfer and two-step ownership (`startOwnershipTransfer` → `acceptOwnership`), plus cancellation
+5. **Error Handling**: Clear custom errors for unauthorized/invalid operations
+6. **State Management**: Correct transitions, including clearing `pendingOwner` on ownership changes
 
-All 18 tests pass successfully, providing confidence in the contract's security and functionality.
+All tests pass locally, providing confidence in the contract's security and functionality.

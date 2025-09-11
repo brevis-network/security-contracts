@@ -24,6 +24,8 @@ abstract contract AccessControlForwarder is ProposalForwarderBase {
 
     event RevokeRolesProposed(uint256 proposalId, address target, bytes32 role, address[] accounts);
 
+    event SetRoleAdminProposed(uint256 proposalId, address target, bytes32 role, address admin);
+
     function proposeTransferOwnership(address _target, address _newOwner) external {
         bytes memory data = abi.encodeWithSelector(IOwnable.transferOwnership.selector, _newOwner);
         uint256 proposalId = council.createProposal(msg.sender, _target, data);
@@ -70,5 +72,11 @@ abstract contract AccessControlForwarder is ProposalForwarderBase {
         bytes memory data = abi.encodeWithSelector(IAccessControl.revokeRoles.selector, _role, _accounts);
         uint256 proposalId = council.createProposal(msg.sender, _target, data);
         emit RevokeRolesProposed(proposalId, _target, _role, _accounts);
+    }
+
+    function proposeSetRoleAdmin(address _target, bytes32 _role, address _admin) external {
+        bytes memory data = abi.encodeWithSelector(IAccessControl.setRoleAdmin.selector, _role, _admin);
+        uint256 proposalId = council.createProposal(msg.sender, _target, data);
+        emit SetRoleAdminProposed(proposalId, _target, _role, _admin);
     }
 }

@@ -156,7 +156,9 @@ contract PauserControlTest is Test {
 
         // Try to grant role as non-owner
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(IOwnable.OwnerUnauthorized.selector, user, address(this)));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAdmin.selector, user, pauserRole)
+        );
         testContract.grantRole(pauserRole, pauser);
 
         // Verify the role was not granted
@@ -171,8 +173,10 @@ contract PauserControlTest is Test {
         testContract.transferOwnership(newOwner);
         assertEq(testContract.owner(), newOwner);
 
-        // Old owner can't grant roles anymore
-        vm.expectRevert(abi.encodeWithSelector(IOwnable.OwnerUnauthorized.selector, address(this), newOwner));
+        // Old owner can't grant roles anymore (not owner nor role admin)
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAdmin.selector, address(this), pauserRole)
+        );
         testContract.grantRole(pauserRole, pauser);
 
         // New owner can grant roles
@@ -201,6 +205,75 @@ contract PauserControlTest is Test {
         vm.prank(pauser2);
         testContract.unpause();
         assertFalse(testContract.paused());
+    }
+
+    // -------- Role admin tests --------
+
+    function testSetRoleAdminOnlyOwner() public {
+        bytes32 role = testContract.PAUSER_ROLE();
+        address admin = makeAddr("admin");
+
+        // Non-owner cannot set admin
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(IOwnable.OwnerUnauthorized.selector, user, address(this)));
+        testContract.setRoleAdmin(role, admin);
+
+        // Owner can set admin
+        testContract.setRoleAdmin(role, admin);
+        assertEq(testContract.roleAdmin(role), admin);
+    }
+
+    function testRoleAdminCanGrantAndRevoke() public {
+        bytes32 role = testContract.PAUSER_ROLE();
+        address admin = makeAddr("admin");
+
+        // Set role admin
+        testContract.setRoleAdmin(role, admin);
+        assertEq(testContract.roleAdmin(role), admin);
+
+        // Admin can grant
+        vm.prank(admin);
+        testContract.grantRole(role, pauser);
+        assertTrue(testContract.hasRole(role, pauser));
+
+        // Admin can revoke
+        vm.prank(admin);
+        testContract.revokeRole(role, pauser);
+        assertFalse(testContract.hasRole(role, pauser));
+    }
+
+    function testOwnerCanGrantEvenWithRoleAdminSet() public {
+        bytes32 role = testContract.PAUSER_ROLE();
+        address admin = makeAddr("admin");
+        testContract.setRoleAdmin(role, admin);
+
+        // Owner still can grant
+        testContract.grantRole(role, pauser);
+        assertTrue(testContract.hasRole(role, pauser));
+
+        // And revoke
+        testContract.revokeRole(role, pauser);
+        assertFalse(testContract.hasRole(role, pauser));
+    }
+
+    function testClearingRoleAdminRestrictsToOwner() public {
+        bytes32 role = testContract.PAUSER_ROLE();
+        address admin = makeAddr("admin");
+        testContract.setRoleAdmin(role, admin);
+        assertEq(testContract.roleAdmin(role), admin);
+
+        // Clear admin (owner-only management)
+        testContract.setRoleAdmin(role, address(0));
+        assertEq(testContract.roleAdmin(role), address(0));
+
+        // Former admin can no longer manage
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAdmin.selector, admin, role));
+        testContract.grantRole(role, pauser);
+
+        // Owner can still manage
+        testContract.grantRole(role, pauser);
+        assertTrue(testContract.hasRole(role, pauser));
     }
 
     // -------- Ownable two-step transfer tests --------
