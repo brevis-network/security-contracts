@@ -202,4 +202,75 @@ contract PauserControlTest is Test {
         testContract.unpause();
         assertFalse(testContract.paused());
     }
+
+    // -------- Ownable two-step transfer tests --------
+
+    function testStartOwnershipTransferAndAccept() public {
+        address newOwner = makeAddr("newOwner_twoStep");
+
+        // Start two-step transfer
+        assertEq(testContract.pendingOwner(), address(0));
+        testContract.startOwnershipTransfer(newOwner);
+        assertEq(testContract.pendingOwner(), newOwner);
+        assertEq(testContract.owner(), address(this));
+
+        // Accept as pending owner
+        vm.prank(newOwner);
+        testContract.acceptOwnership();
+        assertEq(testContract.owner(), newOwner);
+        assertEq(testContract.pendingOwner(), address(0));
+    }
+
+    function testAcceptOwnership_Unauthorized() public {
+        address newOwner = makeAddr("pendingOwner");
+        address attacker = makeAddr("attacker");
+
+        testContract.startOwnershipTransfer(newOwner);
+        assertEq(testContract.pendingOwner(), newOwner);
+
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(IOwnable.OwnerUnauthorized.selector, attacker, newOwner));
+        testContract.acceptOwnership();
+    }
+
+    function testCancelOwnershipTransfer() public {
+        address newOwner = makeAddr("toCancel");
+
+        testContract.startOwnershipTransfer(newOwner);
+        assertEq(testContract.pendingOwner(), newOwner);
+
+        testContract.cancelOwnershipTransfer();
+        assertEq(testContract.pendingOwner(), address(0));
+        // Owner remains unchanged
+        assertEq(testContract.owner(), address(this));
+    }
+
+    function testDirectTransferVoidsPending() public {
+        address A = makeAddr("pendingA");
+        address B = makeAddr("directB");
+
+        // Start two-step to A
+        testContract.startOwnershipTransfer(A);
+        assertEq(testContract.pendingOwner(), A);
+
+        // Direct transfer to B should clear pending and change owner immediately
+        testContract.transferOwnership(B);
+        assertEq(testContract.owner(), B);
+        assertEq(testContract.pendingOwner(), address(0));
+
+        // Old pending A can no longer accept; expect revert with pendingOwner == address(0)
+        vm.prank(A);
+        vm.expectRevert(abi.encodeWithSelector(IOwnable.OwnerUnauthorized.selector, A, address(0)));
+        testContract.acceptOwnership();
+    }
+
+    function testStartOwnershipTransfer_ZeroAddressReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(IOwnable.OwnerZeroAddress.selector));
+        testContract.startOwnershipTransfer(address(0));
+    }
+
+    function testTransferOwnership_ZeroAddressReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(IOwnable.OwnerZeroAddress.selector));
+        testContract.transferOwnership(address(0));
+    }
 }

@@ -5,7 +5,7 @@ A collection of security-focused smart contracts for access control and governan
 ## Components
 
 ### Access Control
-- **Ownable**: Single owner supporting proxy-based upgrade patterns
+- **Ownable**: Single owner with direct and two-step (start/accept/cancel) transfers; proxy-friendly
 - **AccessControl**: Enumerated role-based permissions for granular function gating
 - **PauserControl**: Lightweight circuit breaker
 

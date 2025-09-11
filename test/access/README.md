@@ -1,6 +1,6 @@
 # PauserControl Test Suite
 
-This test suite provides comprehensive coverage for the PauserControl contract and its inherited functionality from AccessControl and Ownable.
+This test suite provides comprehensive coverage for the `PauserControl` contract and its inherited functionality from `AccessControl` and `Ownable`, including the two-step ownership flow.
 
 ## Test Contract
 - `TestPauserContract`: A simple implementation that inherits from `PauserControl`
@@ -26,13 +26,19 @@ This test suite provides comprehensive coverage for the PauserControl contract a
 - ✅ `testFunctionWhenNotPaused`: Verifies functions work when not paused
 
 ### Ownership Tests
-- ✅ `testTransferOwnership`: Tests ownership transfer and access control changes
+- ✅ `testTransferOwnership`: Immediate transfer and access control updates
+- ✅ `testStartOwnershipTransferAndAccept`: Two-step start → accept flow clears pending and updates owner
+- ✅ `testAcceptOwnership_Unauthorized`: Only the pending owner can accept
+- ✅ `testCancelOwnershipTransfer`: Canceling two-step clears pending without changing owner
+- ✅ `testDirectTransferVoidsPending`: Direct transfer clears pending and prevents stale accept
+- ✅ `testStartOwnershipTransfer_ZeroAddressReverts`: startOwnershipTransfer reverts on zero address
+- ✅ `testTransferOwnership_ZeroAddressReverts`: transferOwnership reverts on zero address
 
 ## Key Features Tested
-1. **Role-based Access Control**: PAUSER_ROLE management and enforcement
+1. **Role-based Access Control**: `PAUSER_ROLE` management and enforcement
 2. **Pausable Functionality**: Contract pause/unpause with proper access control  
-3. **Ownership Management**: Owner-only functions and ownership transfer
-4. **Error Handling**: Proper revert messages for unauthorized access
-5. **State Management**: Correct state transitions and validations
+3. **Ownership Management**: Direct transfer and two-step ownership (`startOwnershipTransfer` → `acceptOwnership`), plus cancellation
+4. **Error Handling**: Clear custom errors for unauthorized/invalid operations
+5. **State Management**: Correct transitions, including clearing `pendingOwner` on ownership changes
 
-All 13 tests pass successfully, providing confidence in the contract's security and functionality.
+All 18 tests pass successfully, providing confidence in the contract's security and functionality.

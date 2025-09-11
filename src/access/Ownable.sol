@@ -5,34 +5,48 @@ pragma solidity ^0.8.20;
 import "./interfaces/IOwnable.sol";
 
 /**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (an owner) that can be granted exclusive access to
- * specific functions.
+ * @title Ownable (direct + two-step ownership transfers)
+ * @notice Basic access control: an owner can call functions guarded by {onlyOwner}.
+ * @dev This contract supports two ways to change ownership:
+ *  - Direct transfer via {transferOwnership}: immediate change of owner.
+ *  - Two-step transfer via {startOwnershipTransfer} -> {acceptOwnership}: adds an
+ *    explicit handoff that must be accepted by the pending owner.
  *
- * By default, the owner account will be the one that deploys the contract. This
- * can later be changed with {transferOwnership}.
- *
- * This module is used through inheritance. It will make available the modifier
- * `onlyOwner`, which can be applied to your functions to restrict their use to
- * the owner.
- *
- * This adds a normal func that setOwner if _owner is address(0). So we can't allow
- * renounceOwnership. So we can support Proxy based upgradable contract
+ * Initialization and constraints:
+ *  - The constructor sets the deployer as the initial owner.
+ *  - For proxy patterns, use {initOwner} or {initOwner(address)} exactly once;
+ *    calling these when an owner is already set reverts with {OwnerAlreadySet}.
+ *  - This implementation intentionally does NOT support renounceOwnership.
+ *    Rationale: the proxy initializer(s) rely on the invariant that after
+ *    initialization, {_owner} is never the zero address. Allowing renounce
+ *    would reset {_owner} to address(0), re-enabling {initOwner} and creating
+ *    a critical re-initialization/takeover risk in upgradeable deployments.
  */
 abstract contract Ownable is IOwnable {
     address private _owner;
+    address private _pendingOwner;
 
     /**
-     * @dev Initializes the contract setting the deployer as the initial owner.
+     * @notice Sets the deployer as the initial owner.
+     * @dev Called at deployment time (non-proxy). For proxies, see {initOwner}.
      */
     constructor() {
         _setOwner(msg.sender);
     }
 
     /**
-     * @dev Only to be called by inherit contracts, in their init func called by Proxy
-     * we require _owner == address(0), which is only possible when it's a delegateCall
-     * because constructor sets _owner in contract state.
+     * @dev Restricts a function to the current owner; otherwise reverts.
+     */
+    modifier onlyOwner() {
+        if (owner() != msg.sender) {
+            revert OwnerUnauthorized(msg.sender, owner());
+        }
+        _;
+    }
+
+    /**
+     * @notice One-time initializer for proxy deployments to set the owner to the caller.
+     * @dev Reverts if the owner is already initialized.
      */
     function initOwner() internal {
         if (_owner != address(0)) {
@@ -41,7 +55,11 @@ abstract contract Ownable is IOwnable {
         _setOwner(msg.sender);
     }
 
-    // allow setting owner different from deployer
+    /**
+     * @notice One-time initializer for proxy deployments to set the owner to a specific address.
+     * @dev Reverts if already initialized or if `newowner` is the zero address.
+     * @param newowner The address to set as the initial owner.
+     */
     function initOwner(address newowner) internal {
         if (_owner != address(0)) {
             revert OwnerAlreadySet(_owner);
@@ -53,25 +71,25 @@ abstract contract Ownable is IOwnable {
     }
 
     /**
-     * @dev Returns the address of the current owner.
+     * @notice Returns the address of the current owner.
      */
     function owner() public view virtual returns (address) {
         return _owner;
     }
 
     /**
-     * @dev Throws if called by any account other than the owner.
+     * @notice Returns the address currently proposed to become the new owner, if any.
+     * @dev Returns address(0) when no two-step transfer is in progress.
      */
-    modifier onlyOwner() {
-        if (owner() != msg.sender) {
-            revert OwnerUnauthorized(msg.sender, owner());
-        }
-        _;
+    function pendingOwner() public view virtual returns (address) {
+        return _pendingOwner;
     }
 
     /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     * Can only be called by the current owner.
+     * @notice Transfers ownership immediately to `newOwner`.
+     * @dev Can only be called by the current owner.
+     * Clears any pending proposal via {_setOwner}.
+     * @param newOwner The address to receive ownership immediately.
      */
     function transferOwnership(address newOwner) public virtual onlyOwner {
         if (newOwner == address(0)) {
@@ -80,9 +98,52 @@ abstract contract Ownable is IOwnable {
         _setOwner(newOwner);
     }
 
+    /**
+     * @notice Propose `newOwner` as the pending owner for a two-step transfer.
+     * @dev Can only be called by the current owner.
+     * @param newOwner The address proposed to accept and become the new owner.
+     */
+    function startOwnershipTransfer(address newOwner) public virtual onlyOwner {
+        if (newOwner == address(0)) {
+            revert OwnerZeroAddress();
+        }
+        _pendingOwner = newOwner;
+        emit OwnershipTransferStarted(_owner, newOwner);
+    }
+
+    /**
+     * @notice Called by the pending owner to accept ownership.
+     * @dev Can only be called by the _pendingOwner.
+     */
+    function acceptOwnership() public virtual {
+        if (msg.sender != _pendingOwner) {
+            revert OwnerUnauthorized(msg.sender, _pendingOwner);
+        }
+        _setOwner(_pendingOwner);
+    }
+
+    /**
+     * @notice Cancels the in-progress two-step ownership transfer.
+     * @dev Does not change the current owner. Can only be called by the current owner.
+     */
+    function cancelOwnershipTransfer() public virtual onlyOwner {
+        address oldPendingOwner = _pendingOwner;
+        delete _pendingOwner;
+        emit OwnershipTransferCanceled(_owner, oldPendingOwner);
+    }
+
+    /**
+     * @dev Internal owner setter. Always clears {_pendingOwner} to prevent stale accepts.
+     * @param newOwner The address to set as the new owner.
+     */
     function _setOwner(address newOwner) private {
         address oldOwner = _owner;
         _owner = newOwner;
+        // Clearing any pending owner guarantees that once ownership changes,
+        // there is no stale pending owner that can later claim ownership.
+        if (_pendingOwner != address(0)) {
+            delete _pendingOwner;
+        }
         emit OwnershipTransferred(oldOwner, newOwner);
     }
 }

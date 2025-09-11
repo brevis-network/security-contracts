@@ -10,6 +10,12 @@ import "./ProposalForwarderBase.sol";
 abstract contract AccessControlForwarder is ProposalForwarderBase {
     event TransferOwnershipProposed(uint256 proposalId, address target, address newOwner);
 
+    event StartOwnershipTransferProposed(uint256 proposalId, address target, address newOwner);
+
+    event AcceptOwnershipProposed(uint256 proposalId, address target);
+
+    event CancelOwnershipTransferProposed(uint256 proposalId, address target);
+
     event GrantRoleProposed(uint256 proposalId, address target, bytes32 role, address account);
 
     event GrantRolesProposed(uint256 proposalId, address target, bytes32 role, address[] accounts);
@@ -22,6 +28,24 @@ abstract contract AccessControlForwarder is ProposalForwarderBase {
         bytes memory data = abi.encodeWithSelector(IOwnable.transferOwnership.selector, _newOwner);
         uint256 proposalId = council.createProposal(msg.sender, _target, data);
         emit TransferOwnershipProposed(proposalId, _target, _newOwner);
+    }
+
+    function proposeStartOwnershipTransfer(address _target, address _newOwner) external {
+        bytes memory data = abi.encodeWithSelector(IOwnable.startOwnershipTransfer.selector, _newOwner);
+        uint256 proposalId = council.createProposal(msg.sender, _target, data);
+        emit StartOwnershipTransferProposed(proposalId, _target, _newOwner);
+    }
+
+    function proposeAcceptOwnership(address _target) external {
+        bytes memory data = abi.encodeWithSelector(IOwnable.acceptOwnership.selector);
+        uint256 proposalId = council.createProposal(msg.sender, _target, data);
+        emit AcceptOwnershipProposed(proposalId, _target);
+    }
+
+    function proposeCancelOwnershipTransfer(address _target) external {
+        bytes memory data = abi.encodeWithSelector(IOwnable.cancelOwnershipTransfer.selector);
+        uint256 proposalId = council.createProposal(msg.sender, _target, data);
+        emit CancelOwnershipTransferProposed(proposalId, _target);
     }
 
     function proposeGrantRole(address _target, bytes32 _role, address _account) external {
