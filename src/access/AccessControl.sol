@@ -33,6 +33,19 @@ abstract contract AccessControl is Ownable, IAccessControl {
         _;
     }
 
+    modifier onlyRoleAdminOrOwner(bytes32 role) {
+        if (owner() == msg.sender) {
+            return;
+        }
+        address admin = _roleAdmin[role];
+        if (admin != address(0) && admin == msg.sender) {
+            return;
+        }
+        // If admin is zero, only owner may manage; otherwise, specific admin can manage.
+        revert AccessControlUnauthorizedAdmin(msg.sender, role);
+        _;
+    }
+
     /**
      * @dev Checks if an account has a specific role
      */
@@ -64,16 +77,14 @@ abstract contract AccessControl is Ownable, IAccessControl {
     /**
      * @dev Grants a role to an account. Callable by owner or the role's admin.
      */
-    function grantRole(bytes32 role, address account) public {
-        _checkRoleAdminOrOwner(role);
+    function grantRole(bytes32 role, address account) public onlyRoleAdminOrOwner(role) {
         _grantRole(role, account);
     }
 
     /**
      * @dev Grants a role to multiple accounts. Callable by owner or the role's admin.
      */
-    function grantRoles(bytes32 role, address[] memory accounts) public {
-        _checkRoleAdminOrOwner(role);
+    function grantRoles(bytes32 role, address[] memory accounts) public onlyRoleAdminOrOwner(role) {
         for (uint256 i = 0; i < accounts.length; i++) {
             _grantRole(role, accounts[i]);
         }
@@ -82,16 +93,14 @@ abstract contract AccessControl is Ownable, IAccessControl {
     /**
      * @dev Revokes a role from an account. Callable by owner or the role's admin.
      */
-    function revokeRole(bytes32 role, address account) public {
-        _checkRoleAdminOrOwner(role);
+    function revokeRole(bytes32 role, address account) public onlyRoleAdminOrOwner(role) {
         _revokeRole(role, account);
     }
 
     /**
      * @dev Revokes a role from multiple accounts. Callable by owner or the role's admin.
      */
-    function revokeRoles(bytes32 role, address[] memory accounts) public {
-        _checkRoleAdminOrOwner(role);
+    function revokeRoles(bytes32 role, address[] memory accounts) public onlyRoleAdminOrOwner(role) {
         for (uint256 i = 0; i < accounts.length; i++) {
             _revokeRole(role, accounts[i]);
         }
@@ -130,17 +139,5 @@ abstract contract AccessControl is Ownable, IAccessControl {
         }
         _roleMembers[role].remove(account);
         emit RoleRevoked(role, account);
-    }
-
-    function _checkRoleAdminOrOwner(bytes32 role) internal view {
-        address admin = _roleAdmin[role];
-        if (owner() == msg.sender) {
-            return;
-        }
-        if (admin != address(0) && admin == msg.sender) {
-            return;
-        }
-        // If admin is zero, only owner may manage; otherwise, specific admin can manage.
-        revert AccessControlUnauthorizedAdmin(msg.sender, role);
     }
 }
