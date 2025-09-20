@@ -140,10 +140,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _datas The encoded function call data
      * @return proposalIds The IDs of the created proposals
      */
-    function createProposals(
-        address[] calldata _targets,
-        bytes[] calldata _datas
-    ) external returns (uint256[] memory proposalIds) {
+    function createProposals(address[] calldata _targets, bytes[] calldata _datas)
+        external
+        returns (uint256[] memory proposalIds)
+    {
         uint256 numProposals = _targets.length;
         if (numProposals != _datas.length) revert InvalidLength();
         proposalIds = new uint256[](numProposals);
@@ -160,11 +160,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _data The encoded function call data
      * @return proposalId The ID of the created proposal
      */
-    function createProposal(
-        address _proposer,
-        address _target,
-        bytes memory _data
-    ) external returns (uint256 proposalId) {
+    function createProposal(address _proposer, address _target, bytes memory _data)
+        external
+        returns (uint256 proposalId)
+    {
         if (!proposerForwarders.contains(msg.sender)) revert InvalidProposalForwarder();
         if (_data.length < 4) revert InvalidSelector();
         return _createProposal(_proposer, _target, _data, ProposalType.External);
@@ -188,10 +187,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _powers Array of voting powers corresponding to each voter
      * @return proposalId The ID of the created proposal
      */
-    function proposeVoterUpdate(
-        address[] calldata _voters,
-        uint256[] calldata _powers
-    ) external returns (uint256 proposalId) {
+    function proposeVoterUpdate(address[] calldata _voters, uint256[] calldata _powers)
+        external
+        returns (uint256 proposalId)
+    {
         if (_voters.length != _powers.length) revert InvalidLength();
         bytes memory data = abi.encode(_voters, _powers);
         proposalId = _createProposal(msg.sender, address(0), data, ProposalType.VoterUpdate);
@@ -204,10 +203,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _authorized Array of authorization status (true = authorize, false = revoke)
      * @return proposalId The ID of the created proposal
      */
-    function proposeProposalForwarderUpdate(
-        address[] calldata _addrs,
-        bool[] calldata _authorized
-    ) external returns (uint256 proposalId) {
+    function proposeProposalForwarderUpdate(address[] calldata _addrs, bool[] calldata _authorized)
+        external
+        returns (uint256 proposalId)
+    {
         if (_addrs.length != _authorized.length) revert InvalidLength();
         bytes memory data = abi.encode(_addrs, _authorized);
         proposalId = _createProposal(msg.sender, address(0), data, ProposalType.ProposalForwarderUpdate);
@@ -239,11 +238,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _amount The amount of tokens to transfer
      * @return proposalId The ID of the created proposal
      */
-    function proposeTokenTransfer(
-        address _receiver,
-        address _token,
-        uint256 _amount
-    ) external returns (uint256 proposalId) {
+    function proposeTokenTransfer(address _receiver, address _token, uint256 _amount)
+        external
+        returns (uint256 proposalId)
+    {
         bytes memory data = abi.encode(_receiver, _token, _amount);
         proposalId = _createProposal(msg.sender, address(0), data, ProposalType.TokenTransfer);
         emit TokenTransferProposed(proposalId, _receiver, _token, _amount);
@@ -257,12 +255,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _type The type of the proposal
      * @return proposalId The ID of the created proposal
      */
-    function _createProposal(
-        address _proposer,
-        address _target,
-        bytes memory _data,
-        ProposalType _type
-    ) private returns (uint256 proposalId) {
+    function _createProposal(address _proposer, address _target, bytes memory _data, ProposalType _type)
+        private
+        returns (uint256 proposalId)
+    {
         if (!voters.contains(_proposer)) revert OnlyVoterCanCreateProposal();
         proposalId = nextProposalId;
         nextProposalId += 1;
@@ -324,7 +320,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
 
         // Executor automatically votes yes
         p.votes[msg.sender] = true;
-        (, , bool pass) = countVotes(_proposalId, _type, _target, bytes4(_data[:4]));
+        (,, bool pass) = countVotes(_proposalId, _type, _target, bytes4(_data[:4]));
         if (!pass) revert NotEnoughVotes();
 
         // Execute the proposal based on its type
@@ -442,10 +438,8 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @notice Executes fast-pass authorization update proposal
      */
     function _executeFastPassUpdate(bytes calldata _data) private {
-        (address[] memory targets, bytes4[] memory selectors, bool[] memory authorized) = abi.decode(
-            _data,
-            (address[], bytes4[], bool[])
-        );
+        (address[] memory targets, bytes4[] memory selectors, bool[] memory authorized) =
+            abi.decode(_data, (address[], bytes4[], bool[]));
         for (uint256 i = 0; i < targets.length; i++) {
             bytes32 key = _packFastPassKey(targets[i], selectors[i]);
             if (authorized[i]) {
@@ -463,7 +457,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
     function _executeTokenTransfer(bytes calldata _data) private {
         (address receiver, address token, uint256 amount) = abi.decode(_data, (address, address, uint256));
         if (token == address(0)) {
-            (bool sent, ) = receiver.call{value: amount, gas: nativeTokenTransferGas}("");
+            (bool sent,) = receiver.call{value: amount, gas: nativeTokenTransferGas}("");
             if (!sent) revert FailedToSendNativeToken();
         } else {
             IERC20(token).safeTransfer(receiver, amount);
@@ -563,12 +557,11 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @return yesVotes The total voting power of "yes" votes
      * @return pass Whether the proposal has enough votes to pass
      */
-    function countVotes(
-        uint256 _proposalId,
-        ProposalType _type,
-        address _target,
-        bytes4 _selector
-    ) public view returns (uint256 totalPower, uint256 yesVotes, bool pass) {
+    function countVotes(uint256 _proposalId, ProposalType _type, address _target, bytes4 _selector)
+        public
+        view
+        returns (uint256 totalPower, uint256 yesVotes, bool pass)
+    {
         // Use the simplified version to get vote counts
         (totalPower, yesVotes) = countVotes(_proposalId);
 
