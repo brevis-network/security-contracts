@@ -34,15 +34,14 @@ abstract contract AccessControl is Ownable, IAccessControl {
     }
 
     modifier onlyRoleAdminOrOwner(bytes32 role) {
-        if (owner() == msg.sender) {
-            return;
+        // Allow if caller is owner, otherwise require explicit role admin
+        if (msg.sender != owner()) {
+            address admin = _roleAdmin[role];
+            // If admin is zero: only owner may manage; otherwise must match admin
+            if (admin == address(0) || admin != msg.sender) {
+                revert AccessControlUnauthorizedAdmin(msg.sender, role);
+            }
         }
-        address admin = _roleAdmin[role];
-        if (admin != address(0) && admin == msg.sender) {
-            return;
-        }
-        // If admin is zero, only owner may manage; otherwise, specific admin can manage.
-        revert AccessControlUnauthorizedAdmin(msg.sender, role);
         _;
     }
 
