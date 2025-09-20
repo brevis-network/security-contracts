@@ -160,7 +160,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _data The encoded function call data
      * @return proposalId The ID of the created proposal
      */
-    function createProposal(address _proposer, address _target, bytes memory _data)
+    function createProposal(address _proposer, address _target, bytes calldata _data)
         external
         returns (uint256 proposalId)
     {
