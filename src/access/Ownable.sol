@@ -57,17 +57,17 @@ abstract contract Ownable is IOwnable {
 
     /**
      * @notice One-time initializer for proxy deployments to set the owner to a specific address.
-     * @dev Reverts if already initialized or if `newowner` is the zero address.
-     * @param newowner The address to set as the initial owner.
+     * @dev Reverts if already initialized or if `newOwner` is the zero address.
+     * @param newOwner The address to set as the initial owner.
      */
-    function initOwner(address newowner) internal {
+    function initOwner(address newOwner) internal {
         if (_owner != address(0)) {
             revert OwnerAlreadySet(_owner);
         }
-        if (newowner == address(0)) {
+        if (newOwner == address(0)) {
             revert OwnerZeroAddress();
         }
-        _setOwner(newowner);
+        _setOwner(newOwner);
     }
 
     /**
