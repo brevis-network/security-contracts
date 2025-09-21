@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'LICENSE'
+      - '.prettierrc.json'
   workflow_dispatch:
 
 jobs:
