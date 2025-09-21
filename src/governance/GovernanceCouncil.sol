@@ -51,7 +51,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
 
     /// Proposal data structure containing hash, deadline, and votes
     struct Proposal {
-        bytes32 dataHash; // hash(proposalType, targetAddress, calldata)
+        bytes32 dataHash; // keccak256(abi.encodePacked(_type, _target, _data))
         uint256 deadline; // Timestamp when proposal expires
         mapping(address => bool) votes; // Voter address -> vote (true = yes, false = no)
     }
@@ -129,9 +129,28 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _data The encoded function call data
      * @return proposalId The ID of the created proposal
      */
-    function createProposal(address _target, bytes memory _data) external returns (uint256 proposalId) {
+    function createProposal(address _target, bytes calldata _data) public returns (uint256 proposalId) {
         if (_data.length < 4) revert InvalidSelector();
         return _createProposal(msg.sender, _target, _data, ProposalType.External);
+    }
+
+    /**
+     * @notice Batch creates proposals
+     * @param _targets The target contract address to call
+     * @param _datas The encoded function call data
+     * @return proposalIds The IDs of the created proposals
+     */
+    function createProposals(address[] calldata _targets, bytes[] calldata _datas)
+        external
+        returns (uint256[] memory proposalIds)
+    {
+        uint256 numProposals = _targets.length;
+        if (numProposals != _datas.length) revert InvalidLength();
+        proposalIds = new uint256[](numProposals);
+        for (uint256 i = 0; i < numProposals; i++) {
+            proposalIds[i] = createProposal(_targets[i], _datas[i]);
+        }
+        return proposalIds;
     }
 
     /**
@@ -141,7 +160,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _data The encoded function call data
      * @return proposalId The ID of the created proposal
      */
-    function createProposal(address _proposer, address _target, bytes memory _data)
+    function createProposal(address _proposer, address _target, bytes calldata _data)
         external
         returns (uint256 proposalId)
     {
@@ -290,7 +309,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _target The target contract address (must match the original)
      * @param _data The encoded function call data (must match the original)
      */
-    function executeProposal(uint256 _proposalId, ProposalType _type, address _target, bytes calldata _data) external {
+    function executeProposal(uint256 _proposalId, ProposalType _type, address _target, bytes calldata _data) public {
         if (!voters.contains(msg.sender)) revert OnlyVoterCanExecuteProposal();
         Proposal storage p = proposals[_proposalId];
         if (block.timestamp >= p.deadline) revert DeadlinePassed();
@@ -307,6 +326,28 @@ contract GovernanceCouncil is IGovernanceCouncil {
         // Execute the proposal based on its type
         _executeProposalByType(_type, _target, _data);
         emit ProposalExecuted(_proposalId);
+    }
+
+    /**
+     * @notice Batch executes proposals
+     * @param _proposalIds The IDs of the proposals to execute
+     * @param _types The types of the proposals (must match the original)
+     * @param _targets The target contract addresses (must match the original)
+     * @param _datas The encoded function call datas (must match the original)
+     */
+    function executeProposals(
+        uint256[] calldata _proposalIds,
+        ProposalType[] calldata _types,
+        address[] calldata _targets,
+        bytes[] calldata _datas
+    ) external {
+        uint256 numProposals = _proposalIds.length;
+        if (numProposals != _types.length || numProposals != _targets.length || numProposals != _datas.length) {
+            revert InvalidLength();
+        }
+        for (uint256 i = 0; i < numProposals; i++) {
+            executeProposal(_proposalIds[i], _types[i], _targets[i], _datas[i]);
+        }
     }
 
     /**
@@ -575,7 +616,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
 
     /**
      * @notice Returns all fast-pass authorization keys
-     * @return authKeys Array of all authorization keys (keccak256(target, selector))
+     * @return authKeys Array of all authorization keys. See {_packFastPassKey}.
      */
     function getFastPassAuthorizations() public view returns (bytes32[] memory authKeys) {
         return authorizedFastPass.values();
