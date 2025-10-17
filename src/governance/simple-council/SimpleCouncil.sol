@@ -43,13 +43,12 @@ contract SimpleCouncil {
     event ProposalExecuted(uint256 indexed proposalId);
 
     error EmptyVoters();
-    error InvalidCaller();
+    error OnlyVoterCanVote();
     error DeadlinePassed();
     error OnlyVoterCanCreateProposal();
     error OnlyVoterCanExecuteProposal();
     error DataHashMismatch();
     error NotEnoughVotes();
-    error ExternalCallFailed(string reason);
 
     /**
      * @notice Initializes the council with the provided voter addresses
@@ -85,7 +84,7 @@ contract SimpleCouncil {
      * @param _vote The vote (true = yes, false = no)
      */
     function voteProposal(uint256 _proposalId, bool _vote) public {
-        if (!voters.contains(msg.sender)) revert InvalidCaller();
+        if (!voters.contains(msg.sender)) revert OnlyVoterCanVote();
         Proposal storage p = proposals[_proposalId];
         if (block.timestamp >= p.deadline) revert DeadlinePassed();
         p.votes[msg.sender] = _vote;
@@ -115,7 +114,12 @@ contract SimpleCouncil {
 
         // Execute the proposed call
         (bool success, bytes memory res) = _target.call(_data);
-        if (!success) revert ExternalCallFailed(_getRevertMsg(res));
+        if (!success) {
+            assembly {
+                // revert with the exact returndata from the failed call
+                revert(add(res, 0x20), mload(res))
+            }
+        }
         emit ProposalExecuted(_proposalId);
     }
 
@@ -165,21 +169,5 @@ contract SimpleCouncil {
             voterList[i] = voters.at(i);
         }
         return voterList;
-    }
-
-    /**
-     * @notice Extracts revert message from failed external call
-     * @dev If no revert string is present, returns a generic message. Decodes standard Error(string).
-     * @param _returnData The return data from the failed call
-     * @return revertMessage The revert message string
-     */
-    function _getRevertMsg(bytes memory _returnData) private pure returns (string memory revertMessage) {
-        // If the _returnData length is less than 68, then the transaction failed silently (without a revert message)
-        if (_returnData.length < 68) return "Transaction reverted silently";
-        assembly {
-            // Slice the sighash
-            _returnData := add(_returnData, 0x04)
-        }
-        return abi.decode(_returnData, (string)); // All that remains is the revert string
     }
 }

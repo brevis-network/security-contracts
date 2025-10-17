@@ -25,7 +25,6 @@ interface IGovernanceCouncil {
     error OnlyVoterCanExecuteProposal();
     error DataHashMismatch();
     error NotEnoughVotes();
-    error ExternalCallFailed(string reason);
     error ZeroPower();
     error NotVoter();
     error FailedToSendNativeToken();

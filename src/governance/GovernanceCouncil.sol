@@ -377,7 +377,12 @@ contract GovernanceCouncil is IGovernanceCouncil {
      */
     function _executeExternal(address _target, bytes calldata _data) private {
         (bool success, bytes memory res) = _target.call(_data);
-        if (!success) revert ExternalCallFailed(_getRevertMsg(res));
+        if (!success) {
+            assembly {
+                // revert with the exact returndata from the failed call
+                revert(add(res, 0x20), mload(res))
+            }
+        }
         bytes4 selector = _data.length >= 4 ? bytes4(_data[:4]) : bytes4(0);
         emit ExternalCallExecuted(_target, selector);
     }

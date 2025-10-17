@@ -102,7 +102,8 @@ contract CouncilExecutionTest is CouncilTest {
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        vm.expectRevert(abi.encodeWithSelector(IGovernanceCouncil.ExternalCallFailed.selector, "Mock revert"));
+        // External call now bubbles the exact revert data from target
+        vm.expectRevert(abi.encodeWithSignature("Error(string)", "Mock revert"));
         vm.prank(voter1);
         council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
     }

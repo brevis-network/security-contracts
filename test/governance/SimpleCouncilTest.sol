@@ -129,7 +129,7 @@ contract SimpleCouncilTest is Test {
         uint256 proposalId = council.createProposal(address(target), data);
 
         vm.prank(dan);
-        vm.expectRevert(SimpleCouncil.InvalidCaller.selector);
+        vm.expectRevert(SimpleCouncil.OnlyVoterCanVote.selector);
         council.voteProposal(proposalId, true);
     }
 
@@ -228,8 +228,8 @@ contract SimpleCouncilTest is Test {
         council.voteProposal(proposalId, true);
 
         vm.prank(carol);
-        // Expect custom error with reason string
-        vm.expectRevert(abi.encodeWithSelector(SimpleCouncil.ExternalCallFailed.selector, "Mock revert"));
+        // External call now bubbles the exact revert data from target
+        vm.expectRevert(abi.encodeWithSignature("Error(string)", "Mock revert"));
         council.executeProposal(proposalId, address(target), data);
     }
 
