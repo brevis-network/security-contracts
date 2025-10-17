@@ -7,6 +7,10 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
  * @title SimpleCouncil
  * @author Brevis Network
  * @notice A minimal, fixed-parameter council for external call proposals
+ * @dev 1 address = 1 vote; fixed thresholds (QuorumThreshold = 60) and active period (ActivePeriod = 1 day).
+ *      Proposals are external calls identified by keccak256(target, data). Proposer auto-votes yes; executor
+ *      auto-votes yes on execution. Deadline is zeroed before the external call to mitigate reentrancy; quorum is
+ *      checked with a non-truncating comparison: yesVotes * 100 >= QuorumThreshold * totalVoters.
  */
 contract SimpleCouncil {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -21,7 +25,7 @@ contract SimpleCouncil {
 
     /// Proposal data structure containing hash, deadline, and votes
     struct Proposal {
-        bytes32 dataHash; // keccak256(abi.encodePacked(_type, _target, _data))
+        bytes32 dataHash; // keccak256(abi.encodePacked(_target, _data))
         uint256 deadline; // Timestamp when proposal expires
         mapping(address => bool) votes; // Voter address -> vote (true = yes, false = no)
     }

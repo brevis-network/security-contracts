@@ -15,10 +15,7 @@ import "../../access/interfaces/IAccessControl.sol";
  *      via `createProposal` and executed through `executeProposal` on SimpleCouncil.
  */
 contract SimpleAdminCouncil is SimpleCouncil {
-    /**
-     * @dev Constructor
-     * @param _voters List of council voter addresses
-     */
+    // Initializes the council with the provided voter addresses
     constructor(address[] memory _voters) SimpleCouncil(_voters) {}
 
     event TransferOwnershipProposed(uint256 proposalId, address target, address newOwner);
