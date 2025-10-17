@@ -15,13 +15,20 @@ abstract contract ProposalForwarderBase {
     IGovernanceCouncil public council;
     address private initializer;
 
+    event CouncilInitialized(IGovernanceCouncil council);
+
     enum Action {
         Set,
         Add,
         Remove
     }
 
-    constructor(address _initializer) {
+    constructor(address _council, address _initializer) {
+        if (_council != address(0)) {
+            council = IGovernanceCouncil(_council);
+            emit CouncilInitialized(council);
+            return; // Skip initializer if council is pre-set
+        }
         initializer = _initializer;
     }
 
@@ -29,5 +36,6 @@ abstract contract ProposalForwarderBase {
         if (msg.sender != initializer) revert OnlyInitializerCanInit();
         if (address(council) != address(0)) revert CouncilAddressAlreadySet();
         council = _council;
+        emit CouncilInitialized(council);
     }
 }

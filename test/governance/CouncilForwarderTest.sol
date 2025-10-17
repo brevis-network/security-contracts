@@ -5,17 +5,10 @@ import "forge-std/Test.sol";
 import "../../src/governance/GovernanceCouncil.sol";
 import "../../src/governance/proposal-forwarders/AccessControlForwarder.sol";
 import "../../src/governance/proposal-forwarders/ProxyAdminForwarder.sol";
+import "../../src/governance/proposal-forwarders/CommonProposalForwarder.sol";
 import "../../src/access/interfaces/IOwnable.sol";
 import "../../src/access/interfaces/IAccessControl.sol";
 import "../../src/governance/proposal-forwarders/interfaces/IProxyAdmin.sol";
-
-contract TestAccessControlForwarder is AccessControlForwarder {
-    constructor(address _initializer) ProposalForwarderBase(_initializer) {}
-}
-
-contract TestProxyAdminForwarder is ProxyAdminForwarder {
-    constructor(address _initializer) ProposalForwarderBase(_initializer) {}
-}
 
 // Mock contracts for testing
 contract MockOwnable {
@@ -74,8 +67,7 @@ contract MockProxyAdmin {
 
 contract CouncilForwarderTest is Test {
     GovernanceCouncil public council;
-    TestAccessControlForwarder public accessForwarder;
-    TestProxyAdminForwarder public proxyForwarder;
+    CommonProposalForwarder public forwarder;
 
     MockOwnable public mockOwnable;
     MockAccessControl public mockAccessControl;
@@ -99,9 +91,8 @@ contract CouncilForwarderTest is Test {
     function setUp() public {
         vm.startPrank(deployer);
 
-        // Deploy forwarders first
-        accessForwarder = new TestAccessControlForwarder(deployer);
-        proxyForwarder = new TestProxyAdminForwarder(deployer);
+        // Deploy unified forwarder first (no council set yet, initializer is deployer)
+        forwarder = new CommonProposalForwarder(address(0), deployer);
 
         // Deploy mock contracts
         mockOwnable = new MockOwnable();
@@ -118,9 +109,8 @@ contract CouncilForwarderTest is Test {
         weights[1] = 100;
         weights[2] = 100;
 
-        address[] memory forwarders = new address[](2);
-        forwarders[0] = address(accessForwarder);
-        forwarders[1] = address(proxyForwarder);
+        address[] memory forwarders = new address[](1);
+        forwarders[0] = address(forwarder);
 
         // Deploy council with all parameters
         council = new GovernanceCouncil(
@@ -132,9 +122,8 @@ contract CouncilForwarderTest is Test {
             40 // 40% fast-pass threshold
         );
 
-        // Initialize forwarders with council
-        accessForwarder.initCouncil(council);
-        proxyForwarder.initCouncil(council);
+        // Initialize forwarder with council
+        forwarder.initCouncil(council);
 
         vm.stopPrank();
     }
@@ -146,7 +135,7 @@ contract CouncilForwarderTest is Test {
     function test_ProposalForwarderBase_InitCouncil_Success() public {
         // Deploy new forwarder
         vm.prank(deployer);
-        TestAccessControlForwarder newForwarder = new TestAccessControlForwarder(deployer);
+        CommonProposalForwarder newForwarder = new CommonProposalForwarder(address(0), deployer);
 
         assertEq(address(newForwarder.council()), address(0));
 
@@ -158,7 +147,7 @@ contract CouncilForwarderTest is Test {
 
     function test_ProposalForwarderBase_InitCouncil_OnlyInitializer() public {
         vm.prank(deployer);
-        TestAccessControlForwarder newForwarder = new TestAccessControlForwarder(deployer);
+        CommonProposalForwarder newForwarder = new CommonProposalForwarder(address(0), deployer);
 
         vm.prank(voter1);
         vm.expectRevert(ProposalForwarderBase.OnlyInitializerCanInit.selector);
@@ -168,7 +157,7 @@ contract CouncilForwarderTest is Test {
     function test_ProposalForwarderBase_InitCouncil_AlreadySet() public {
         vm.expectRevert(ProposalForwarderBase.CouncilAddressAlreadySet.selector);
         vm.prank(deployer);
-        accessForwarder.initCouncil(council);
+        forwarder.initCouncil(council);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -181,7 +170,7 @@ contract CouncilForwarderTest is Test {
 
         // voter1 calls the forwarder function - voter1 must be a voter for this to work
         vm.prank(voter1);
-        accessForwarder.proposeTransferOwnership(address(mockOwnable), newOwner);
+        forwarder.proposeTransferOwnership(address(mockOwnable), newOwner);
 
         // Verify proposal was created - check the public fields
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -196,7 +185,7 @@ contract CouncilForwarderTest is Test {
         emit AccessControlForwarder.GrantRoleProposed(0, address(mockAccessControl), ROLE, account1);
 
         vm.prank(voter1);
-        accessForwarder.proposeGrantRole(address(mockAccessControl), ROLE, account1);
+        forwarder.proposeGrantRole(address(mockAccessControl), ROLE, account1);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -213,7 +202,7 @@ contract CouncilForwarderTest is Test {
         emit AccessControlForwarder.GrantRolesProposed(0, address(mockAccessControl), ROLE, accounts);
 
         vm.prank(voter1);
-        accessForwarder.proposeGrantRoles(address(mockAccessControl), ROLE, accounts);
+        forwarder.proposeGrantRoles(address(mockAccessControl), ROLE, accounts);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -226,7 +215,7 @@ contract CouncilForwarderTest is Test {
         emit AccessControlForwarder.RevokeRoleProposed(0, address(mockAccessControl), ROLE, account1);
 
         vm.prank(voter1);
-        accessForwarder.proposeRevokeRole(address(mockAccessControl), ROLE, account1);
+        forwarder.proposeRevokeRole(address(mockAccessControl), ROLE, account1);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -243,7 +232,7 @@ contract CouncilForwarderTest is Test {
         emit AccessControlForwarder.RevokeRolesProposed(0, address(mockAccessControl), ROLE, accounts);
 
         vm.prank(voter1);
-        accessForwarder.proposeRevokeRoles(address(mockAccessControl), ROLE, accounts);
+        forwarder.proposeRevokeRoles(address(mockAccessControl), ROLE, accounts);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -260,7 +249,7 @@ contract CouncilForwarderTest is Test {
         emit ProxyAdminForwarder.ChangeProxyAdminProposed(0, proxyAdmin, proxy, newAdmin);
 
         vm.prank(voter1);
-        proxyForwarder.proposeChangeProxyAdmin(proxyAdmin, proxy, newAdmin);
+        forwarder.proposeChangeProxyAdmin(proxyAdmin, proxy, newAdmin);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -273,7 +262,7 @@ contract CouncilForwarderTest is Test {
         emit ProxyAdminForwarder.UpgradeProposed(0, proxyAdmin, proxy, implementation);
 
         vm.prank(voter1);
-        proxyForwarder.proposeUpgrade(proxyAdmin, proxy, implementation);
+        forwarder.proposeUpgrade(proxyAdmin, proxy, implementation);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -288,7 +277,7 @@ contract CouncilForwarderTest is Test {
         emit ProxyAdminForwarder.UpgradeAndCallProposed(0, proxyAdmin, proxy, implementation, callData);
 
         vm.prank(voter1);
-        proxyForwarder.proposeUpgradeAndCall(proxyAdmin, proxy, implementation, callData);
+        forwarder.proposeUpgradeAndCall(proxyAdmin, proxy, implementation, callData);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -301,7 +290,7 @@ contract CouncilForwarderTest is Test {
         emit ProxyAdminForwarder.ChangeAdminProposed(0, proxy);
 
         vm.prank(voter1);
-        proxyForwarder.proposeChangeAdmin(proxy, newAdmin);
+        forwarder.proposeChangeAdmin(proxy, newAdmin);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -314,7 +303,7 @@ contract CouncilForwarderTest is Test {
         emit ProxyAdminForwarder.UpgradeToProposed(0, proxy, implementation);
 
         vm.prank(voter1);
-        proxyForwarder.proposeUpgradeTo(proxy, implementation);
+        forwarder.proposeUpgradeTo(proxy, implementation);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -329,7 +318,7 @@ contract CouncilForwarderTest is Test {
         emit ProxyAdminForwarder.UpgradeToAndCallProposed(0, proxy, implementation, callData);
 
         vm.prank(voter1);
-        proxyForwarder.proposeUpgradeToAndCall(proxy, implementation, callData);
+        forwarder.proposeUpgradeToAndCall(proxy, implementation, callData);
 
         // Verify proposal was created
         (bytes32 dataHash, uint256 deadline) = council.proposals(0);
@@ -344,7 +333,7 @@ contract CouncilForwarderTest is Test {
     function test_Integration_AccessControlForwarderFullWorkflow() public {
         // 1. Forwarder creates proposal
         vm.prank(voter1);
-        accessForwarder.proposeTransferOwnership(address(mockOwnable), newOwner);
+        forwarder.proposeTransferOwnership(address(mockOwnable), newOwner);
 
         // 2. Voters vote on proposal
         vm.prank(voter2); // voter1 already voted when creating the proposal
@@ -362,7 +351,7 @@ contract CouncilForwarderTest is Test {
     function test_Integration_ProxyAdminForwarderFullWorkflow() public {
         // 1. Forwarder creates proposal for changing proxy admin
         vm.prank(voter1);
-        proxyForwarder.proposeChangeProxyAdmin(proxyAdmin, proxy, newAdmin);
+        forwarder.proposeChangeProxyAdmin(proxyAdmin, proxy, newAdmin);
 
         // 2. Voters vote on proposal
         vm.prank(voter2); // voter1 already voted when creating the proposal
@@ -381,11 +370,11 @@ contract CouncilForwarderTest is Test {
     function test_Integration_MultipleProposalsFromDifferentForwarders() public {
         // Access control forwarder creates proposal
         vm.prank(voter1);
-        accessForwarder.proposeGrantRole(address(mockAccessControl), ROLE, account1);
+        forwarder.proposeGrantRole(address(mockAccessControl), ROLE, account1);
 
         // Proxy admin forwarder creates proposal
         vm.prank(voter2);
-        proxyForwarder.proposeUpgrade(proxyAdmin, proxy, implementation);
+        forwarder.proposeUpgrade(proxyAdmin, proxy, implementation);
 
         // Verify both proposals exist
         (bytes32 dataHash1,) = council.proposals(0);
@@ -398,7 +387,7 @@ contract CouncilForwarderTest is Test {
 
     function test_Integration_ForwarderCannotCreateProposalWithoutCouncilInit() public {
         vm.prank(deployer);
-        TestAccessControlForwarder uninitForwarder = new TestAccessControlForwarder(deployer);
+        CommonProposalForwarder uninitForwarder = new CommonProposalForwarder(address(0), deployer);
 
         // Should revert because council is not initialized (address(0))
         vm.prank(forwarder1);
@@ -408,7 +397,7 @@ contract CouncilForwarderTest is Test {
 
     function test_Integration_OnlyTrustedForwardersCanCreateProposals() public {
         vm.prank(deployer);
-        TestAccessControlForwarder untrustedForwarder = new TestAccessControlForwarder(deployer);
+        CommonProposalForwarder untrustedForwarder = new CommonProposalForwarder(address(0), deployer);
         vm.prank(deployer);
         untrustedForwarder.initCouncil(council);
 
@@ -424,28 +413,28 @@ contract CouncilForwarderTest is Test {
         // Non-voter should not be able to use forwarder to create proposals
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        accessForwarder.proposeTransferOwnership(address(mockOwnable), makeAddr("newOwner"));
+        forwarder.proposeTransferOwnership(address(mockOwnable), makeAddr("newOwner"));
 
         // Verify the same for other forwarder functions
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        accessForwarder.proposeGrantRole(address(mockAccessControl), bytes32("ADMIN"), nonVoter);
+        forwarder.proposeGrantRole(address(mockAccessControl), bytes32("ADMIN"), nonVoter);
 
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        proxyForwarder.proposeUpgrade(address(mockProxyAdmin), makeAddr("proxy"), makeAddr("newImplementation"));
+        forwarder.proposeUpgrade(address(mockProxyAdmin), makeAddr("proxy"), makeAddr("newImplementation"));
 
         // Test the new ProxyAdminForwarder functions as well
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        proxyForwarder.proposeChangeAdmin(address(mockProxyAdmin), makeAddr("newAdmin"));
+        forwarder.proposeChangeAdmin(address(mockProxyAdmin), makeAddr("newAdmin"));
 
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        proxyForwarder.proposeUpgradeTo(address(mockProxyAdmin), makeAddr("newImplementation"));
+        forwarder.proposeUpgradeTo(address(mockProxyAdmin), makeAddr("newImplementation"));
 
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        proxyForwarder.proposeUpgradeToAndCall(address(mockProxyAdmin), makeAddr("newImplementation"), "");
+        forwarder.proposeUpgradeToAndCall(address(mockProxyAdmin), makeAddr("newImplementation"), "");
     }
 }
