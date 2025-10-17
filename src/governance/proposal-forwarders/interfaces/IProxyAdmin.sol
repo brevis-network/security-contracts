@@ -2,13 +2,11 @@
 
 pragma solidity ^0.8.20;
 
+/**
+ * @title IProxyAdmin (owner-facing subset)
+ * @notice Minimal interface for ProxyAdmin operations invoked by its owner.
+ */
 interface IProxyAdmin {
-    function changeAdmin(address _newAdmin) external;
-
-    function upgradeTo(address _implementation) external;
-
-    function upgradeToAndCall(address _implementation, bytes memory _data) external;
-
     function changeProxyAdmin(address _proxy, address _newAdmin) external;
 
     function upgrade(address _proxy, address _implementation) external;

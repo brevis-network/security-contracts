@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "./SimpleCouncil.sol";
 import "../../access/interfaces/IOwnable.sol";
 import "../../access/interfaces/IAccessControl.sol";
+import "../proposal-forwarders/interfaces/IProxyAdmin.sol";
 
 /**
  * @title SimpleAdminCouncil
@@ -18,24 +19,23 @@ contract SimpleAdminCouncil is SimpleCouncil {
     // Initializes the council with the provided voter addresses
     constructor(address[] memory _voters) SimpleCouncil(_voters) {}
 
+    // Ownable and AccessControl operations
     event TransferOwnershipProposed(uint256 proposalId, address target, address newOwner);
-
     event StartOwnershipTransferProposed(uint256 proposalId, address target, address newOwner);
-
     event AcceptOwnershipProposed(uint256 proposalId, address target);
-
     event CancelOwnershipTransferProposed(uint256 proposalId, address target);
-
     event GrantRoleProposed(uint256 proposalId, address target, bytes32 role, address account);
-
     event GrantRolesProposed(uint256 proposalId, address target, bytes32 role, address[] accounts);
-
     event RevokeRoleProposed(uint256 proposalId, address target, bytes32 role, address account);
-
     event RevokeRolesProposed(uint256 proposalId, address target, bytes32 role, address[] accounts);
-
     event SetRoleAdminProposed(uint256 proposalId, address target, bytes32 role, address admin);
 
+    // ProxyAdmin owner-facing operations (assumes `target` is a ProxyAdmin owned by this council)
+    event ChangeProxyAdminProposed(uint256 proposalId, address target, address proxy, address newAdmin);
+    event UpgradeProposed(uint256 proposalId, address target, address proxy, address implementation);
+    event UpgradeAndCallProposed(uint256 proposalId, address target, address proxy, address implementation, bytes data);
+
+    // =========================== Ownable and AccessControl helpers ===========================
     function proposeTransferOwnership(address _target, address _newOwner) external {
         bytes memory data = abi.encodeWithSelector(IOwnable.transferOwnership.selector, _newOwner);
         uint256 proposalId = createProposal(_target, data);
@@ -88,5 +88,26 @@ contract SimpleAdminCouncil is SimpleCouncil {
         bytes memory data = abi.encodeWithSelector(IAccessControl.setRoleAdmin.selector, _role, _admin);
         uint256 proposalId = createProposal(_target, data);
         emit SetRoleAdminProposed(proposalId, _target, _role, _admin);
+    }
+
+    // =========================== ProxyAdmin owner helpers ===========================
+    function proposeChangeProxyAdmin(address _proxyAdmin, address _proxy, address _newAdmin) external {
+        bytes memory data = abi.encodeWithSelector(IProxyAdmin.changeProxyAdmin.selector, _proxy, _newAdmin);
+        uint256 proposalId = createProposal(_proxyAdmin, data);
+        emit ChangeProxyAdminProposed(proposalId, _proxyAdmin, _proxy, _newAdmin);
+    }
+
+    function proposeUpgrade(address _proxyAdmin, address _proxy, address _implementation) external {
+        bytes memory data = abi.encodeWithSelector(IProxyAdmin.upgrade.selector, _proxy, _implementation);
+        uint256 proposalId = createProposal(_proxyAdmin, data);
+        emit UpgradeProposed(proposalId, _proxyAdmin, _proxy, _implementation);
+    }
+
+    function proposeUpgradeAndCall(address _proxyAdmin, address _proxy, address _implementation, bytes calldata _data)
+        external
+    {
+        bytes memory data = abi.encodeWithSelector(IProxyAdmin.upgradeAndCall.selector, _proxy, _implementation, _data);
+        uint256 proposalId = createProposal(_proxyAdmin, data);
+        emit UpgradeAndCallProposed(proposalId, _proxyAdmin, _proxy, _implementation, _data);
     }
 }

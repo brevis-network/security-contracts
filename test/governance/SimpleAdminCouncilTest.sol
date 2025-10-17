@@ -5,11 +5,32 @@ import "forge-std/Test.sol";
 import "../../src/governance/simple-council/SimpleAdminCouncil.sol";
 import "../../src/access/AccessControl.sol";
 import "../../src/access/Ownable.sol";
+import "../../src/governance/proposal-forwarders/interfaces/IProxyAdmin.sol";
 
 // Concrete targets to be administered by the council
 contract OwnableTarget is Ownable {}
 
 contract AccessControlTarget is AccessControl {}
+
+// Minimal ProxyAdmin-like contract owned by the council in tests
+contract MockProxyAdmin is Ownable {
+    mapping(address => address) public proxyAdmins;
+    mapping(address => address) public proxyImplementations;
+    bytes public lastData;
+
+    function changeProxyAdmin(address _proxy, address _newAdmin) external onlyOwner {
+        proxyAdmins[_proxy] = _newAdmin;
+    }
+
+    function upgrade(address _proxy, address _implementation) external onlyOwner {
+        proxyImplementations[_proxy] = _implementation;
+    }
+
+    function upgradeAndCall(address _proxy, address _implementation, bytes calldata _data) external onlyOwner {
+        proxyImplementations[_proxy] = _implementation;
+        lastData = _data;
+    }
+}
 
 contract SimpleAdminCouncilTest is Test {
     // Actors
@@ -23,6 +44,7 @@ contract SimpleAdminCouncilTest is Test {
     SimpleAdminCouncil public council;
     OwnableTarget public ownableTarget;
     AccessControlTarget public accessTarget;
+    MockProxyAdmin public proxyAdminTarget;
 
     bytes32 constant ROLE = keccak256("TEST_ROLE");
 
@@ -42,12 +64,15 @@ contract SimpleAdminCouncilTest is Test {
         // Deploy targets and transfer ownership to the council so it has admin rights
         ownableTarget = new OwnableTarget();
         accessTarget = new AccessControlTarget();
+        proxyAdminTarget = new MockProxyAdmin();
         ownableTarget.transferOwnership(address(council));
         accessTarget.transferOwnership(address(council));
+        proxyAdminTarget.transferOwnership(address(council));
 
         // Sanity
         assertEq(ownableTarget.owner(), address(council));
         assertEq(accessTarget.owner(), address(council));
+        assertEq(proxyAdminTarget.owner(), address(council));
     }
 
     function _nextProposalId() internal view returns (uint256) {
@@ -157,5 +182,53 @@ contract SimpleAdminCouncilTest is Test {
         council.executeProposal(pid, address(accessTarget), data);
 
         assertEq(accessTarget.roleAdmin(ROLE), alice);
+    }
+
+    // =========================== ProxyAdmin owner tests ===========================
+    function testProposeChangeProxyAdminAndExecute() public {
+        address proxy = makeAddr("proxy");
+        address newAdmin = makeAddr("newAdmin");
+
+        uint256 pid = _nextProposalId();
+        vm.prank(alice);
+        council.proposeChangeProxyAdmin(address(proxyAdminTarget), proxy, newAdmin);
+
+        bytes memory data = abi.encodeWithSelector(IProxyAdmin.changeProxyAdmin.selector, proxy, newAdmin);
+        vm.prank(bob);
+        council.executeProposal(pid, address(proxyAdminTarget), data);
+
+        assertEq(proxyAdminTarget.proxyAdmins(proxy), newAdmin);
+    }
+
+    function testProposeUpgradeAndExecute() public {
+        address proxy = makeAddr("proxy");
+        address implementation = makeAddr("impl");
+
+        uint256 pid = _nextProposalId();
+        vm.prank(alice);
+        council.proposeUpgrade(address(proxyAdminTarget), proxy, implementation);
+
+        bytes memory data = abi.encodeWithSelector(IProxyAdmin.upgrade.selector, proxy, implementation);
+        vm.prank(bob);
+        council.executeProposal(pid, address(proxyAdminTarget), data);
+
+        assertEq(proxyAdminTarget.proxyImplementations(proxy), implementation);
+    }
+
+    function testProposeUpgradeAndCallAndExecute() public {
+        address proxy = makeAddr("proxy");
+        address implementation = makeAddr("impl");
+        bytes memory callData = abi.encodeWithSignature("initialize(address)", erin);
+
+        uint256 pid = _nextProposalId();
+        vm.prank(alice);
+        council.proposeUpgradeAndCall(address(proxyAdminTarget), proxy, implementation, callData);
+
+        bytes memory data = abi.encodeWithSelector(IProxyAdmin.upgradeAndCall.selector, proxy, implementation, callData);
+        vm.prank(bob);
+        council.executeProposal(pid, address(proxyAdminTarget), data);
+
+        assertEq(proxyAdminTarget.proxyImplementations(proxy), implementation);
+        assertEq(proxyAdminTarget.lastData(), callData);
     }
 }

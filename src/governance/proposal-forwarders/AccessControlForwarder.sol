@@ -7,23 +7,16 @@ import "../../access/interfaces/IAccessControl.sol";
 import "../IGovernanceCouncil.sol";
 import "./ProposalForwarderBase.sol";
 
+// Assume the council governs contracts with AccessControl and Ownable functionality.
 abstract contract AccessControlForwarder is ProposalForwarderBase {
     event TransferOwnershipProposed(uint256 proposalId, address target, address newOwner);
-
     event StartOwnershipTransferProposed(uint256 proposalId, address target, address newOwner);
-
     event AcceptOwnershipProposed(uint256 proposalId, address target);
-
     event CancelOwnershipTransferProposed(uint256 proposalId, address target);
-
     event GrantRoleProposed(uint256 proposalId, address target, bytes32 role, address account);
-
     event GrantRolesProposed(uint256 proposalId, address target, bytes32 role, address[] accounts);
-
     event RevokeRoleProposed(uint256 proposalId, address target, bytes32 role, address account);
-
     event RevokeRolesProposed(uint256 proposalId, address target, bytes32 role, address[] accounts);
-
     event SetRoleAdminProposed(uint256 proposalId, address target, bytes32 role, address admin);
 
     function proposeTransferOwnership(address _target, address _newOwner) external {

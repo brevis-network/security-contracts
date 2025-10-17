@@ -285,47 +285,6 @@ contract CouncilForwarderTest is Test {
         assertGt(deadline, block.timestamp);
     }
 
-    function test_ProxyAdminForwarder_ProposeChangeAdmin() public {
-        vm.expectEmit(true, true, true, true);
-        emit ProxyAdminForwarder.ChangeAdminProposed(0, proxy);
-
-        vm.prank(voter1);
-        forwarder.proposeChangeAdmin(proxy, newAdmin);
-
-        // Verify proposal was created
-        (bytes32 dataHash, uint256 deadline) = council.proposals(0);
-        assertTrue(dataHash != bytes32(0));
-        assertGt(deadline, block.timestamp);
-    }
-
-    function test_ProxyAdminForwarder_ProposeUpgradeTo() public {
-        vm.expectEmit(true, true, true, true);
-        emit ProxyAdminForwarder.UpgradeToProposed(0, proxy, implementation);
-
-        vm.prank(voter1);
-        forwarder.proposeUpgradeTo(proxy, implementation);
-
-        // Verify proposal was created
-        (bytes32 dataHash, uint256 deadline) = council.proposals(0);
-        assertTrue(dataHash != bytes32(0));
-        assertGt(deadline, block.timestamp);
-    }
-
-    function test_ProxyAdminForwarder_ProposeUpgradeToAndCall() public {
-        bytes memory callData = abi.encodeWithSignature("initialize(address)", account1);
-
-        vm.expectEmit(true, true, true, true);
-        emit ProxyAdminForwarder.UpgradeToAndCallProposed(0, proxy, implementation, callData);
-
-        vm.prank(voter1);
-        forwarder.proposeUpgradeToAndCall(proxy, implementation, callData);
-
-        // Verify proposal was created
-        (bytes32 dataHash, uint256 deadline) = council.proposals(0);
-        assertTrue(dataHash != bytes32(0));
-        assertGt(deadline, block.timestamp);
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════════════════
     //                                 INTEGRATION TESTS
     // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -424,17 +383,17 @@ contract CouncilForwarderTest is Test {
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
         forwarder.proposeUpgrade(address(mockProxyAdmin), makeAddr("proxy"), makeAddr("newImplementation"));
 
-        // Test the new ProxyAdminForwarder functions as well
+        // Test the ProxyAdmin-owned functions as well
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        forwarder.proposeChangeAdmin(address(mockProxyAdmin), makeAddr("newAdmin"));
+        forwarder.proposeChangeProxyAdmin(address(mockProxyAdmin), makeAddr("proxy"), makeAddr("newAdmin"));
 
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        forwarder.proposeUpgradeTo(address(mockProxyAdmin), makeAddr("newImplementation"));
+        forwarder.proposeUpgrade(address(mockProxyAdmin), makeAddr("proxy"), makeAddr("newImplementation"));
 
         vm.prank(nonVoter);
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanCreateProposal.selector);
-        forwarder.proposeUpgradeToAndCall(address(mockProxyAdmin), makeAddr("newImplementation"), "");
+        forwarder.proposeUpgradeAndCall(address(mockProxyAdmin), makeAddr("proxy"), makeAddr("newImplementation"), "");
     }
 }
