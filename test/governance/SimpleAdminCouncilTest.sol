@@ -59,7 +59,8 @@ contract SimpleAdminCouncilTest is Test {
         voters[0] = alice;
         voters[1] = bob;
         voters[2] = carol;
-        council = new SimpleAdminCouncil(voters);
+        // For 3 voters, require 2 yes votes (≈60%); activePeriod 0 => default 86400
+        council = new SimpleAdminCouncil(voters, 2, 0);
 
         // Deploy targets and transfer ownership to the council so it has admin rights
         ownableTarget = new OwnableTarget();

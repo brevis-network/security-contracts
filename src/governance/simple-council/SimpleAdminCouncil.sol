@@ -16,8 +16,10 @@ import "../proposal-forwarders/interfaces/IProxyAdmin.sol";
  *      via `createProposal` and executed through `executeProposal` on SimpleCouncil.
  */
 contract SimpleAdminCouncil is SimpleCouncil {
-    // Initializes the council with the provided voter addresses
-    constructor(address[] memory _voters) SimpleCouncil(_voters) {}
+    // Initializes the council with the provided voter addresses, required yes votes, and proposal active period
+    constructor(address[] memory _voters, uint256 _requiredYesVotes, uint256 _activePeriod)
+        SimpleCouncil(_voters, _requiredYesVotes, _activePeriod)
+    {}
 
     // Ownable and AccessControl operations
     event TransferOwnershipProposed(uint256 proposalId, address target, address newOwner);

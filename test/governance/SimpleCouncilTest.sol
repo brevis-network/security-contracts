@@ -66,7 +66,8 @@ contract SimpleCouncilTest is Test {
         voters[1] = bob;
         voters[2] = carol;
 
-        council = new SimpleCouncil(voters);
+        // For 3 voters, 60% quorum => 2 required; activePeriod 0 => default 86400
+        council = new SimpleCouncil(voters, 2, 0);
     }
 
     function testConstructorAndGetters() public view {
@@ -84,7 +85,7 @@ contract SimpleCouncilTest is Test {
     function testConstructorEmptyVotersReverts() public {
         address[] memory empty;
         vm.expectRevert(SimpleCouncil.EmptyVoters.selector);
-        new SimpleCouncil(empty);
+        new SimpleCouncil(empty, 1, 0);
     }
 
     function testCreateProposalByVoterEmitsAndAutoVotes() public {
@@ -141,7 +142,7 @@ contract SimpleCouncilTest is Test {
         uint256 proposalId = council.createProposal(address(target), data);
 
         // Warp past the deadline
-        vm.warp(block.timestamp + council.ActivePeriod() + 1);
+        vm.warp(block.timestamp + council.activePeriod() + 1);
 
         vm.prank(bob);
         vm.expectRevert(SimpleCouncil.DeadlinePassed.selector);
@@ -155,7 +156,8 @@ contract SimpleCouncilTest is Test {
         voters[1] = bob;
         voters[2] = carol;
         voters[3] = dan;
-        SimpleCouncil council4 = new SimpleCouncil(voters);
+        // For 4 voters, 60% quorum rounds up to 3 required
+        SimpleCouncil council4 = new SimpleCouncil(voters, 3, 0);
 
         MockTarget target = new MockTarget();
         bytes memory data = abi.encodeWithSignature("setValue(uint256)", 11);
@@ -210,7 +212,7 @@ contract SimpleCouncilTest is Test {
         council.voteProposal(proposalId, true);
 
         // Move past deadline
-        vm.warp(block.timestamp + council.ActivePeriod() + 1);
+        vm.warp(block.timestamp + council.activePeriod() + 1);
 
         vm.prank(alice);
         vm.expectRevert(SimpleCouncil.DeadlinePassed.selector);
@@ -289,7 +291,8 @@ contract SimpleCouncilTest is Test {
         voters[2] = carol;
         voters[3] = dan;
         voters[4] = makeAddr("erin");
-        SimpleCouncil council5 = new SimpleCouncil(voters);
+        // For 5 voters, 60% quorum rounds up to 3 required
+        SimpleCouncil council5 = new SimpleCouncil(voters, 3, 0);
 
         MockTarget target = new MockTarget();
         bytes memory data = abi.encodeWithSignature("setValue(uint256)", 77);

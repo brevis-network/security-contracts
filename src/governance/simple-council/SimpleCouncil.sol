@@ -7,20 +7,19 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
  * @title SimpleCouncil
  * @author Brevis Network
  * @notice A minimal, fixed-parameter council for external call proposals
- * @dev 1 address = 1 vote; fixed thresholds (QuorumThreshold = 60) and active period (ActivePeriod = 1 day).
- *      Proposals are external calls identified by keccak256(target, data). Proposer auto-votes yes; executor
- *      auto-votes yes on execution. Deadline is zeroed before the external call to mitigate reentrancy; quorum is
- *      checked with a non-truncating comparison: yesVotes * 100 >= QuorumThreshold * totalVoters.
+ * @dev One address = one vote. Immutable requiredYesVotes and activePeriod (secs) are set at construction.
+ *      Proposals are external calls (keccak256(target, data)). Proposer and executor auto-vote yes.
+ *      Deadline is zeroed before external calls (reentrancy guard). Quorum: yesVotes >= requiredYesVotes.
  */
 contract SimpleCouncil {
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    /// Quorum threshold percentage (out of 100) required for a proposal to pass
-    uint256 public constant QuorumThreshold = 60;
+    /// Absolute number of "yes" votes required for a proposal to pass
+    uint256 public immutable requiredYesVotes;
     /// Proposal active period in seconds (after which proposals expire)
-    uint256 public constant ActivePeriod = 86400;
+    uint256 public immutable activePeriod;
 
-    // EnumerableSet of voter addresses, expcted to be small in number
+    /// EnumerableSet of voter addresses, expected to be small in number
     EnumerableSet.AddressSet private voters;
 
     /// Proposal data structure containing hash, deadline, and votes
@@ -49,16 +48,24 @@ contract SimpleCouncil {
     error OnlyVoterCanExecuteProposal();
     error DataHashMismatch();
     error NotEnoughVotes();
+    error InvalidVoter();
+    error InvalidRequiredYesVotes();
 
     /**
-     * @notice Initializes the council with the provided voter addresses
+     * @notice Initializes the council with the provided voter addresses and quorum requirement
      * @param _voters Initial voter list (must be non-empty)
+     * @param _requiredYesVotes Absolute number of yes votes required to pass a proposal
+     * @param _activePeriod Proposal active period in seconds; if 0, defaults to 86400 (1 day)
      */
-    constructor(address[] memory _voters) {
+    constructor(address[] memory _voters, uint256 _requiredYesVotes, uint256 _activePeriod) {
         if (_voters.length == 0) revert EmptyVoters();
         for (uint256 i = 0; i < _voters.length; i++) {
+            if (_voters[i] == address(0)) revert InvalidVoter();
             voters.add(_voters[i]);
         }
+        if (_requiredYesVotes == 0 || _requiredYesVotes > voters.length()) revert InvalidRequiredYesVotes();
+        requiredYesVotes = _requiredYesVotes;
+        activePeriod = _activePeriod == 0 ? 86400 : _activePeriod;
     }
 
     /**
@@ -73,7 +80,7 @@ contract SimpleCouncil {
         nextProposalId += 1;
         Proposal storage p = proposals[proposalId];
         p.dataHash = keccak256(abi.encodePacked(_target, _data));
-        p.deadline = block.timestamp + ActivePeriod;
+        p.deadline = block.timestamp + activePeriod;
         p.votes[msg.sender] = true;
         emit ProposalCreated(proposalId, _target, _data, p.deadline, msg.sender);
     }
@@ -125,10 +132,9 @@ contract SimpleCouncil {
 
     /**
      * @notice Counts the votes for a proposal and determines if quorum is met
-     * @dev Uses non-truncating comparison: yesVotes * 100 >= QuorumThreshold * totalVoters
      * @param _proposalId The ID of the proposal to count votes for
      * @return yesVotes The total number of "yes" votes
-     * @return hasQuorum Whether the proposal has enough votes to pass
+     * @return hasQuorum Whether the proposal has enough votes to pass (yesVotes >= requiredYesVotes)
      */
     function countVotes(uint256 _proposalId) public view returns (uint256 yesVotes, bool hasQuorum) {
         uint256 totalVoters = voters.length();
@@ -136,7 +142,7 @@ contract SimpleCouncil {
             address voter = voters.at(i);
             if (getVote(_proposalId, voter)) yesVotes += 1;
         }
-        hasQuorum = (yesVotes * 100) >= QuorumThreshold * totalVoters;
+        hasQuorum = yesVotes >= requiredYesVotes;
     }
 
     /**
