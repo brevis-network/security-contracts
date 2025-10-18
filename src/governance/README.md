@@ -6,6 +6,8 @@ Weighted multi-sig governance with dual thresholds and pluggable proposal forwar
 
 The contracts implement a simple trust model where council members (voters) can propose and vote on protocol operations. The system features dual thresholds for different security levels and supports extensible proposal forwarders for convenient governance workflows.
 
+> Note: For a minimal, equal‑weight alternative with immutable voters and parameters, see [SimpleCouncil](./simple-council/SimpleCouncil.sol) and [SimpleAdminCouncil](./simple-council/SimpleAdminCouncil.sol).
+
 ## Core Components
 
 ### 1. GovernanceCouncil
@@ -35,10 +37,10 @@ Trusted helper contracts that create proposals for users. Purely ergonomic: enco
 
 #### Available Abstract Forwarders
 
-`AccessControlForwarder`: ownership + access role mamangements  
+`AccessControlForwarder`: ownership + access role management
 `ProxyAdminForwarder`: contract upgrades, proxy admin changes
 
-**Example**: Instead of manually encode proposal calldata, call the forwarder's `proposeGrantRole(target, role, account)`, which handles encoding and emits `GrantRoleProposed(proposalId, target, role, account)`.
+**Example**: Instead of manually encoding proposal calldata, call the forwarder's `proposeGrantRole(target, role, account)`, which handles encoding and emits `GrantRoleProposed(proposalId, target, role, account)`.
 
 **Deployment Pattern**: Deploy a single aggregate immutable forwarder combining needed abstract modules; new capabilities later require deploying an additional forwarder.
 
