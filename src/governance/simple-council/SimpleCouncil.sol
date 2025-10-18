@@ -164,11 +164,10 @@ contract SimpleCouncil {
 
     /**
      * @notice Returns the full list of voter addresses
-     * @return voterList The array of voter addresses
      */
-    function getVoters() external view returns (address[] memory) {
+    function getVoters() external view returns (address[] memory voterList) {
         uint256 totalVoters = voters.length();
-        address[] memory voterList = new address[](totalVoters);
+        voterList = new address[](totalVoters);
         for (uint256 i = 0; i < totalVoters; i++) {
             voterList[i] = voters.at(i);
         }
@@ -179,19 +178,18 @@ contract SimpleCouncil {
      * @notice Returns the voters who currently have the requested vote value for a proposal
      * @param _proposalId The proposal to inspect
      * @param _vote Set to true to return yes voters; set to false to return voters with false in the votes map
-     * @dev "false" includes explicit no and not-yet-voted
      */
-    function getVotersByVote(uint256 _proposalId, bool _vote) external view returns (address[] memory votersList) {
+    function getVotersByVote(uint256 _proposalId, bool _vote) external view returns (address[] memory voterList) {
         (uint256 yesCount,) = countVotes(_proposalId);
         uint256 total = voters.length();
         uint256 cap = _vote ? yesCount : total - yesCount;
-        votersList = new address[](cap);
+        voterList = new address[](cap);
 
         uint256 idx;
         for (uint256 i = 0; i < total; i++) {
             address voter = voters.at(i);
             if (proposals[_proposalId].votes[voter] == _vote) {
-                votersList[idx++] = voter;
+                voterList[idx++] = voter;
                 if (idx == cap) break;
             }
         }
