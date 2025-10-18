@@ -35,11 +35,9 @@ contract SimpleCouncil {
     /// Counter for generating unique proposal IDs
     uint256 public nextProposalId;
 
-    event ProposalCreated(
-        uint256 indexed proposalId, address indexed target, bytes data, uint256 deadline, address proposer
-    );
-    event ProposalVoted(uint256 indexed proposalId, address indexed voter, bool vote);
-    event ProposalExecuted(uint256 indexed proposalId);
+    event ProposalCreated(uint256 proposalId, address target, bytes data, uint256 deadline, address proposer);
+    event ProposalVoted(uint256 proposalId, address voter, bool vote);
+    event ProposalExecuted(uint256 proposalId);
 
     error EmptyVoters();
     error OnlyVoterCanVote();

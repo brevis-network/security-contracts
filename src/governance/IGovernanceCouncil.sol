@@ -91,12 +91,12 @@ interface IGovernanceCouncil {
     event NativeTokenTransferGasUpdated(uint256 oldGas, uint256 newGas);
 
     // Execution-time granular state change events
-    event ProposalForwarderUpdated(address indexed forwarder, bool authorized);
-    event FastPassAuthorizationUpdated(address indexed target, bytes4 indexed selector, bool authorized);
-    event ParamUpdated(Param indexed name, uint256 oldValue, uint256 newValue);
-    event VoterUpdated(address indexed voter, uint256 oldPower, uint256 newPower); // newPower == 0 => removed
-    event TokenTransferred(address indexed receiver, address indexed token, uint256 amount);
-    event ExternalCallExecuted(address indexed target, bytes4 indexed selector);
+    event ProposalForwarderUpdated(address forwarder, bool authorized);
+    event FastPassAuthorizationUpdated(address target, bytes4 selector, bool authorized);
+    event ParamUpdated(Param name, uint256 oldValue, uint256 newValue);
+    event VoterUpdated(address voter, uint256 oldPower, uint256 newPower); // newPower == 0 => removed
+    event TokenTransferred(address receiver, address token, uint256 amount);
+    event ExternalCallExecuted(address target, bytes4 selector);
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                   PROPOSAL CREATION FUNCTIONS
