@@ -174,4 +174,26 @@ contract SimpleCouncil {
         }
         return voterList;
     }
+
+    /**
+     * @notice Returns the voters who currently have the requested vote value for a proposal
+     * @param _proposalId The proposal to inspect
+     * @param _vote Set to true to return yes voters; set to false to return voters with false in the votes map
+     * @dev "false" includes explicit no and not-yet-voted
+     */
+    function getVotersByVote(uint256 _proposalId, bool _vote) external view returns (address[] memory votersList) {
+        (uint256 yesCount,) = countVotes(_proposalId);
+        uint256 total = voters.length();
+        uint256 cap = _vote ? yesCount : total - yesCount;
+        votersList = new address[](cap);
+
+        uint256 idx;
+        for (uint256 i = 0; i < total; i++) {
+            address voter = voters.at(i);
+            if (proposals[_proposalId].votes[voter] == _vote) {
+                votersList[idx++] = voter;
+                if (idx == cap) break;
+            }
+        }
+    }
 }
