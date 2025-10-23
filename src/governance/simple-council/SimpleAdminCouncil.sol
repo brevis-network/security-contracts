@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "./SimpleCouncil.sol";
 import "../../access/interfaces/IOwnable.sol";
 import "../../access/interfaces/IAccessControl.sol";
@@ -36,6 +38,9 @@ contract SimpleAdminCouncil is SimpleCouncil {
     event ChangeProxyAdminProposed(uint256 proposalId, address target, address proxy, address newAdmin);
     event UpgradeProposed(uint256 proposalId, address target, address proxy, address implementation);
     event UpgradeAndCallProposed(uint256 proposalId, address target, address proxy, address implementation, bytes data);
+
+    // ERC20 operations
+    event ERC20TransferProposed(uint256 proposalId, address token, address to, uint256 amount);
 
     // =========================== Ownable and AccessControl helpers ===========================
     function proposeTransferOwnership(address _target, address _newOwner) external {
@@ -111,5 +116,12 @@ contract SimpleAdminCouncil is SimpleCouncil {
         bytes memory data = abi.encodeWithSelector(IProxyAdmin.upgradeAndCall.selector, _proxy, _implementation, _data);
         uint256 proposalId = createProposal(_proxyAdmin, data);
         emit UpgradeAndCallProposed(proposalId, _proxyAdmin, _proxy, _implementation, _data);
+    }
+
+    // =========================== ERC20 helpers ===========================
+    function proposeERC20Transfer(address _token, address _to, uint256 _amount) external {
+        bytes memory data = abi.encodeWithSelector(IERC20.transfer.selector, _to, _amount);
+        uint256 proposalId = createProposal(_token, data);
+        emit ERC20TransferProposed(proposalId, _token, _to, _amount);
     }
 }

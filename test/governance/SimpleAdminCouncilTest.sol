@@ -6,6 +6,7 @@ import "../../src/governance/simple-council/SimpleAdminCouncil.sol";
 import "../../src/access/AccessControl.sol";
 import "../../src/access/Ownable.sol";
 import "../../src/governance/proposal-forwarders/interfaces/IProxyAdmin.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Concrete targets to be administered by the council
 contract OwnableTarget is Ownable {}
@@ -29,6 +30,30 @@ contract MockProxyAdmin is Ownable {
     function upgradeAndCall(address _proxy, address _implementation, bytes calldata _data) external onlyOwner {
         proxyImplementations[_proxy] = _implementation;
         lastData = _data;
+    }
+}
+
+// Mock ERC20 token for testing
+contract MockToken is ERC20 {
+    constructor() ERC20("MockToken", "MOCK") {}
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+}
+
+// ERC20 that always returns false for transfer without changing balances
+contract FalseReturnToken is ERC20 {
+    constructor() ERC20("FalseReturn", "FRET") {}
+
+    function transfer(address to, uint256 amount) public pure override returns (bool) {
+        to;
+        amount; // silence warnings
+        return false;
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
     }
 }
 
@@ -231,5 +256,66 @@ contract SimpleAdminCouncilTest is Test {
 
         assertEq(proxyAdminTarget.proxyImplementations(proxy), implementation);
         assertEq(proxyAdminTarget.lastData(), callData);
+    }
+
+    function testProposeERC20TransferAndExecute() public {
+        // Deploy token and mint to council so it has balance to transfer
+        MockToken token = new MockToken();
+        uint256 amount = 1_000 ether;
+        token.mint(address(council), amount);
+        assertEq(token.balanceOf(address(council)), amount);
+
+        uint256 pid = _nextProposalId();
+
+        // Expect the proposal event
+        vm.expectEmit(false, false, false, true, address(council));
+        emit SimpleAdminCouncil.ERC20TransferProposed(pid, address(token), erin, 100 ether);
+
+        // Propose ERC20 transfer (alice)
+        vm.prank(alice);
+        council.proposeERC20Transfer(address(token), erin, 100 ether);
+
+        // Execute (bob) → adds yes vote and passes 2-of-3
+        bytes memory data = abi.encodeWithSelector(token.transfer.selector, erin, 100 ether);
+        vm.prank(bob);
+        council.executeProposal(pid, address(token), data);
+
+        assertEq(token.balanceOf(erin), 100 ether);
+        assertEq(token.balanceOf(address(council)), amount - 100 ether);
+    }
+
+    function testProposeERC20TransferFalseReturnDoesNotRevertButNoBalanceChange() public {
+        FalseReturnToken token = new FalseReturnToken();
+        uint256 initial = 1_000 ether;
+        token.mint(address(council), initial);
+
+        uint256 pid = _nextProposalId();
+        vm.prank(alice);
+        council.proposeERC20Transfer(address(token), erin, 100 ether);
+
+        bytes memory data = abi.encodeWithSignature("transfer(address,uint256)", erin, 100 ether);
+        vm.prank(bob);
+        council.executeProposal(pid, address(token), data);
+
+        // No revert and no balance change because token returned false and ignored the transfer
+        assertEq(token.balanceOf(erin), 0);
+        assertEq(token.balanceOf(address(council)), initial);
+    }
+
+    function testProposeERC20TransferInsufficientBalanceReverts() public {
+        // Council has zero balance; OZ ERC20.transfer reverts on insufficient funds
+        MockToken token = new MockToken();
+        assertEq(token.balanceOf(address(council)), 0);
+
+        uint256 pid = _nextProposalId();
+        vm.prank(alice);
+        council.proposeERC20Transfer(address(token), erin, 1 ether);
+
+        bytes memory data = abi.encodeWithSelector(token.transfer.selector, erin, 1 ether);
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSignature("ERC20InsufficientBalance(address,uint256,uint256)", address(council), 0, 1 ether)
+        );
+        council.executeProposal(pid, address(token), data);
     }
 }
