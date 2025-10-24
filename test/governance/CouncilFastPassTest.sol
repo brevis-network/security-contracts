@@ -48,9 +48,11 @@ contract CouncilFastPassTest is CouncilTest {
 
         _executeProposal(
             proposalId,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            address(council),
+            abi.encodeCall(
+                council.updateFastPass,
+                (_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            )
         );
 
         // Check authorization was added
@@ -69,9 +71,11 @@ contract CouncilFastPassTest is CouncilTest {
 
         _executeProposal(
             proposalId1,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            address(council),
+            abi.encodeCall(
+                council.updateFastPass,
+                (_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            )
         );
 
         assertTrue(council.isFastPassAuthorized(address(target), MockTarget.setValue.selector));
@@ -84,9 +88,11 @@ contract CouncilFastPassTest is CouncilTest {
 
         _executeProposal(
             proposalId2,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(false))
+            address(council),
+            abi.encodeCall(
+                council.updateFastPass,
+                (_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(false))
+            )
         );
 
         assertFalse(council.isFastPassAuthorized(address(target), MockTarget.setValue.selector));
@@ -101,9 +107,10 @@ contract CouncilFastPassTest is CouncilTest {
 
         _executeProposal(
             proposalId,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(_addressArray(address(target)), _bytes4Array(bytes4(0)), _boolArray(true))
+            address(council),
+            abi.encodeCall(
+                council.updateFastPass, (_addressArray(address(target)), _bytes4Array(bytes4(0)), _boolArray(true))
+            )
         );
 
         // Check different functions are authorized
@@ -121,9 +128,10 @@ contract CouncilFastPassTest is CouncilTest {
 
         _executeProposal(
             proposalId1,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(_addressArray(address(target)), _bytes4Array(bytes4(0)), _boolArray(true))
+            address(council),
+            abi.encodeCall(
+                council.updateFastPass, (_addressArray(address(target)), _bytes4Array(bytes4(0)), _boolArray(true))
+            )
         );
 
         // Add specific authorization for same function
@@ -134,9 +142,11 @@ contract CouncilFastPassTest is CouncilTest {
 
         _executeProposal(
             proposalId2,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            address(council),
+            abi.encodeCall(
+                council.updateFastPass,
+                (_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            )
         );
 
         // Both should be authorized
@@ -160,9 +170,11 @@ contract CouncilFastPassTest is CouncilTest {
 
         _executeProposal(
             fastPassProposalId,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            address(council),
+            abi.encodeCall(
+                council.updateFastPass,
+                (_addressArray(address(target)), _bytes4Array(MockTarget.setValue.selector), _boolArray(true))
+            )
         );
 
         // Create external proposal for setValue (should use fast-pass threshold)
@@ -171,9 +183,8 @@ contract CouncilFastPassTest is CouncilTest {
         uint256 proposalId = council.createProposal(address(target), data);
 
         // Should use fast-pass threshold (40%)
-        (uint256 totalPower, uint256 yesVotes, bool pass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (uint256 totalPower, uint256 yesVotes, bool pass) =
+            council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
 
         assertEq(totalPower, TOTAL_POWER);
         assertEq(yesVotes, VOTER2_POWER); // Only voter2 voted (auto-vote)
@@ -183,9 +194,7 @@ contract CouncilFastPassTest is CouncilTest {
         vm.prank(voter1);
         council.voteProposal(proposalId, true);
 
-        (totalPower, yesVotes, pass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (totalPower, yesVotes, pass) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
 
         assertEq(yesVotes, VOTER1_POWER + VOTER2_POWER);
         assertTrue(pass); // 150/175 = 85% > 40% fast-pass threshold
@@ -198,9 +207,8 @@ contract CouncilFastPassTest is CouncilTest {
         uint256 proposalId = council.createProposal(address(target), data);
 
         // Should use quorum threshold (60%)
-        (uint256 totalPower, uint256 yesVotes, bool pass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (uint256 totalPower, uint256 yesVotes, bool pass) =
+            council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
 
         assertEq(yesVotes, VOTER1_POWER);
         assertFalse(pass); // 100/175 = 57% < 60% quorum threshold
@@ -209,9 +217,7 @@ contract CouncilFastPassTest is CouncilTest {
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        (totalPower, yesVotes, pass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (totalPower, yesVotes, pass) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
 
         assertEq(yesVotes, VOTER1_POWER + VOTER2_POWER);
         assertTrue(pass); // 150/175 = 85% > 60% quorum threshold
@@ -223,7 +229,7 @@ contract CouncilFastPassTest is CouncilTest {
         uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, 10000);
 
         (, uint256 yesVotes, bool pass) =
-            council.countVotes(proposalId, IGovernanceCouncil.ProposalType.ParamUpdate, address(0), bytes4(0));
+            council.countVotes(proposalId, address(council), GovernanceCouncil.updateParam.selector);
 
         assertEq(yesVotes, VOTER1_POWER);
         assertFalse(pass); // Should use 60% quorum threshold, not 40% fast-pass
@@ -233,18 +239,13 @@ contract CouncilFastPassTest is CouncilTest {
     //                                    HELPER FUNCTIONS
     // ════════════════════════════════════════════════════════════════════════════════════════
 
-    function _executeProposal(
-        uint256 proposalId,
-        IGovernanceCouncil.ProposalType proposalType,
-        address target,
-        bytes memory data
-    ) internal {
+    function _executeProposal(uint256 proposalId, address target, bytes memory data) internal {
         // Get enough votes to pass
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
         vm.prank(voter1);
-        council.executeProposal(proposalId, proposalType, target, data);
+        council.executeProposal(proposalId, target, data);
     }
 
     function _addressArray(address addr) internal pure returns (address[] memory) {
@@ -271,9 +272,7 @@ contract CouncilFastPassTest is CouncilTest {
         uint256 proposalId = council.createProposal(address(target), callData);
 
         // Verify it initially requires quorum threshold (3 voters needed)
-        (,, bool passesBeforeFastPass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (,, bool passesBeforeFastPass) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
         assertFalse(passesBeforeFastPass); // Only voter1 voted (auto-vote), need 3 total
 
         // Add fast-pass authorization for this function
@@ -291,24 +290,19 @@ contract CouncilFastPassTest is CouncilTest {
         vm.prank(voter2);
         council.executeProposal(
             fastPassProposalId,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(targets, selectors, authorized)
+            address(council),
+            abi.encodeCall(council.updateFastPass, (targets, selectors, authorized))
         );
 
         // Now the original proposal should pass with fast-pass threshold (2 voters needed)
-        (,, bool passesAfterFastPass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (,, bool passesAfterFastPass) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
         assertTrue(passesAfterFastPass); // voter1's auto-vote (100 power) is enough for fast-pass threshold (40% = 70 power)
 
         // Add voter2's vote - now should pass with fast-pass threshold
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        (,, bool passesWithTwoVotes) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (,, bool passesWithTwoVotes) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
         assertTrue(passesWithTwoVotes); // 2 votes now sufficient due to fast-pass
     }
 
@@ -326,10 +320,7 @@ contract CouncilFastPassTest is CouncilTest {
 
         vm.prank(voter2);
         council.executeProposal(
-            authProposalId,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(targets, selectors, authorized)
+            authProposalId, address(council), abi.encodeCall(council.updateFastPass, (targets, selectors, authorized))
         );
 
         // Create proposal that benefits from fast-pass - only voter1 votes (100 power)
@@ -342,9 +333,7 @@ contract CouncilFastPassTest is CouncilTest {
         // This is enough for fast-pass (40% = 70 power) but not for quorum (60% = 105 power)
 
         // Should pass with fast-pass threshold
-        (,, bool passesWithFastPass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (,, bool passesWithFastPass) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
         assertTrue(passesWithFastPass); // 100 power > 70 needed for fast-pass
 
         // Remove fast-pass authorization
@@ -361,16 +350,11 @@ contract CouncilFastPassTest is CouncilTest {
 
         vm.prank(voter3);
         council.executeProposal(
-            revokeProposalId,
-            IGovernanceCouncil.ProposalType.FastPassUpdate,
-            address(0),
-            abi.encode(targets, selectors, authorized)
+            revokeProposalId, address(council), abi.encodeCall(council.updateFastPass, (targets, selectors, authorized))
         );
 
         // Now the original proposal should fail - needs quorum threshold (105 power)
-        (,, bool failsAfterRevocation) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (,, bool failsAfterRevocation) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
         assertFalse(failsAfterRevocation); // Only 100 power, but now needs 105
     }
 

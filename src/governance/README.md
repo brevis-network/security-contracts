@@ -96,7 +96,7 @@ uint256 proposalId = council.createProposal(target, callData);
 council.voteProposal(proposalId, true);
 
 // Execute when threshold met
-council.executeProposal(proposalId, ProposalType.External, target, callData);
+council.executeProposal(proposalId, target, callData);
 ```
 
 ### Through Proposal Forwarders

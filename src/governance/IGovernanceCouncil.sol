@@ -16,7 +16,6 @@ interface IGovernanceCouncil {
     error InvalidActivePeriod();
     error InvalidInitThresholds();
     error InvalidProposalForwarder();
-    error InvalidProposalType();
     error InvalidThreshold();
     error InvalidCaller();
     error InvalidSelector();
@@ -46,24 +45,6 @@ interface IGovernanceCouncil {
         FastPassThreshold
     }
 
-    /**
-     * @notice Types of proposals supported by the governance system
-     */
-    enum ProposalType {
-        // External contract calls (threshold auto-detected based on fast-pass authorization)
-        External,
-        // Update governance parameters
-        ParamUpdate,
-        // Adding/removing/updating voters
-        VoterUpdate,
-        // Adding/removing proposer proposal forwarder contracts
-        ProposalForwarderUpdate,
-        // Adding/removing fast-pass authorizations
-        FastPassUpdate,
-        // Token transfers from the contract
-        TokenTransfer
-    }
-
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                            EVENTS
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -77,9 +58,8 @@ interface IGovernanceCouncil {
         uint256 fastPassThreshold
     );
 
-    event ProposalCreated(
-        uint256 proposalId, ProposalType proposalType, address target, bytes data, uint256 deadline, address proposer
-    );
+    // Intentionally keep event fields unindexed (see README and interface docs) for readability and gas
+    event ProposalCreated(uint256 proposalId, address target, bytes data, uint256 deadline, address proposer);
     event ProposalVoted(uint256 proposalId, address voter, bool vote);
     event ProposalExecuted(uint256 proposalId);
 
@@ -96,7 +76,6 @@ interface IGovernanceCouncil {
     event ParamUpdated(Param name, uint256 oldValue, uint256 newValue);
     event VoterUpdated(address voter, uint256 oldPower, uint256 newPower); // newPower == 0 => removed
     event TokenTransferred(address receiver, address token, uint256 amount);
-    event ExternalCallExecuted(address target, bytes4 selector);
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                   PROPOSAL CREATION FUNCTIONS
@@ -202,17 +181,19 @@ interface IGovernanceCouncil {
      * @param _target The target contract address (must match the original)
      * @param _data The encoded function call data (must match the original)
      */
-    function executeProposal(uint256 _proposalId, ProposalType _type, address _target, bytes calldata _data) external;
+    /**
+     * @notice Executes a proposal if it has sufficient votes and is still active
+     *         Threshold selection rules:
+     *         - If target == address(this), always use QuorumThreshold (fast-pass ignored)
+     *         - Else, use FastPassThreshold when (target, selector) is authorized; otherwise QuorumThreshold
+     */
+    function executeProposal(uint256 _proposalId, address _target, bytes calldata _data) external;
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                   CONFIGURATION FUNCTIONS
     // ════════════════════════════════════════════════════════════════════════════════════════
 
-    /**
-     * @notice Sets the gas limit for native token transfers to prevent griefing attacks
-     * @param _gasUsed The gas limit to use for native token transfers
-     */
-    function setNativeTokenTransferGas(uint256 _gasUsed) external;
+    // Note: native token transfer gas is governed via an onlySelf function on the implementation
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                        VIEW FUNCTIONS
@@ -253,14 +234,13 @@ interface IGovernanceCouncil {
     /**
      * @notice Counts the votes for a proposal and determines if it passes
      * @param _proposalId The ID of the proposal to count votes for
-     * @param _type The type of the proposal (affects threshold calculation)
-     * @param _target The target contract address (only used for External proposals)
-     * @param _selector The function selector (only used for External proposals)
+     * @param _target The target contract address
+     * @param _selector The function selector (0x00000000 allowed)
      * @return totalPower The total voting power of all voters
      * @return yesVotes The total voting power of "yes" votes
-     * @return pass Whether the proposal has enough votes to pass
+     * @return pass Whether the proposal has enough votes to pass, using rules in executeProposal doc
      */
-    function countVotes(uint256 _proposalId, ProposalType _type, address _target, bytes4 _selector)
+    function countVotes(uint256 _proposalId, address _target, bytes4 _selector)
         external
         view
         returns (uint256 totalPower, uint256 yesVotes, bool pass);

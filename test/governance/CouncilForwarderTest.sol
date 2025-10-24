@@ -301,7 +301,7 @@ contract CouncilForwarderTest is Test {
         // 3. Execute proposal with the correct parameters
         bytes memory data = abi.encodeWithSelector(IOwnable.transferOwnership.selector, newOwner);
         vm.prank(voter1);
-        council.executeProposal(0, IGovernanceCouncil.ProposalType.External, address(mockOwnable), data);
+        council.executeProposal(0, address(mockOwnable), data);
 
         // 4. Verify execution worked
         assertEq(mockOwnable.owner(), newOwner);
@@ -321,7 +321,7 @@ contract CouncilForwarderTest is Test {
         vm.prank(voter1);
         // This should succeed as the call will be made to the proxyAdmin address
         // even though it doesn't implement the interface, the call will complete
-        council.executeProposal(0, IGovernanceCouncil.ProposalType.External, proxyAdmin, data);
+        council.executeProposal(0, proxyAdmin, data);
 
         // The call completed successfully, though proxyAdmin doesn't actually implement the interface
     }

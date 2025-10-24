@@ -235,8 +235,7 @@ contract CouncilTest is Test {
         uint256 proposalId = council.createProposal(address(target), data);
 
         // Verify the data hash is computed correctly
-        bytes32 expectedHash =
-            keccak256(abi.encodePacked(IGovernanceCouncil.ProposalType.External, address(target), data));
+        bytes32 expectedHash = keccak256(abi.encodePacked(address(target), data));
 
         // Verify the proposal data hash matches expected
         (bytes32 actualHash,) = council.proposals(proposalId);
@@ -248,9 +247,7 @@ contract CouncilTest is Test {
 
         bytes32 expectedParamHash = keccak256(
             abi.encodePacked(
-                IGovernanceCouncil.ProposalType.ParamUpdate,
-                address(0),
-                abi.encode(IGovernanceCouncil.Param.ActivePeriod, 3600)
+                address(council), abi.encodeCall(council.updateParam, (IGovernanceCouncil.Param.ActivePeriod, 3600))
             )
         );
 
@@ -422,9 +419,8 @@ contract CouncilTest is Test {
         uint256 proposalId = council.createProposal(address(target), data);
 
         // Should use quorum threshold (no fast-pass authorization)
-        (uint256 totalPower, uint256 yesVotes, bool pass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (uint256 totalPower, uint256 yesVotes, bool pass) =
+            council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
 
         assertEq(totalPower, TOTAL_POWER);
         assertEq(yesVotes, VOTER1_POWER);
@@ -434,9 +430,7 @@ contract CouncilTest is Test {
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        (totalPower, yesVotes, pass) = council.countVotes(
-            proposalId, IGovernanceCouncil.ProposalType.External, address(target), MockTarget.setValue.selector
-        );
+        (totalPower, yesVotes, pass) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
 
         assertEq(yesVotes, VOTER1_POWER + VOTER2_POWER);
         assertTrue(pass); // 150/175 = 85% > 60% quorum threshold

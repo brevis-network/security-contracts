@@ -51,7 +51,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
 
     /// Proposal data structure containing hash, deadline, and votes
     struct Proposal {
-        bytes32 dataHash; // keccak256(abi.encodePacked(_type, _target, _data))
+        bytes32 dataHash; // keccak256(abi.encodePacked(_target, _data))
         uint256 deadline; // Timestamp when proposal expires
         mapping(address => bool) votes; // Voter address -> vote (true = yes, false = no)
     }
@@ -124,14 +124,14 @@ contract GovernanceCouncil is IGovernanceCouncil {
     // ============================================================================================
 
     /**
-     * @notice Creates a new external proposal with auto-detected threshold
+     * @notice Creates a new proposal
      * @param _target The target contract address to call
      * @param _data The encoded function call data
      * @return proposalId The ID of the created proposal
      */
     function createProposal(address _target, bytes calldata _data) public returns (uint256 proposalId) {
         if (_data.length < 4) revert InvalidSelector();
-        return _createProposal(msg.sender, _target, _data, ProposalType.External);
+        return _createProposal(msg.sender, _target, _data);
     }
 
     /**
@@ -166,7 +166,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
     {
         if (!proposerForwarders.contains(msg.sender)) revert InvalidProposalForwarder();
         if (_data.length < 4) revert InvalidSelector();
-        return _createProposal(_proposer, _target, _data, ProposalType.External);
+        return _createProposal(_proposer, _target, _data);
     }
 
     /**
@@ -176,8 +176,8 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @return proposalId The ID of the created proposal
      */
     function proposeParamUpdate(Param _name, uint256 _value) external returns (uint256 proposalId) {
-        bytes memory data = abi.encode(_name, _value);
-        proposalId = _createProposal(msg.sender, address(0), data, ProposalType.ParamUpdate);
+        bytes memory data = abi.encodeCall(this.updateParam, (_name, _value));
+        proposalId = _createProposal(msg.sender, address(this), data);
         emit ParamUpdateProposed(proposalId, _name, _value);
     }
 
@@ -192,8 +192,8 @@ contract GovernanceCouncil is IGovernanceCouncil {
         returns (uint256 proposalId)
     {
         if (_voters.length != _powers.length) revert InvalidLength();
-        bytes memory data = abi.encode(_voters, _powers);
-        proposalId = _createProposal(msg.sender, address(0), data, ProposalType.VoterUpdate);
+        bytes memory data = abi.encodeCall(this.updateVoters, (_voters, _powers));
+        proposalId = _createProposal(msg.sender, address(this), data);
         emit VoterUpdateProposed(proposalId, _voters, _powers);
     }
 
@@ -208,8 +208,8 @@ contract GovernanceCouncil is IGovernanceCouncil {
         returns (uint256 proposalId)
     {
         if (_addrs.length != _authorized.length) revert InvalidLength();
-        bytes memory data = abi.encode(_addrs, _authorized);
-        proposalId = _createProposal(msg.sender, address(0), data, ProposalType.ProposalForwarderUpdate);
+        bytes memory data = abi.encodeCall(this.updateProposalForwarders, (_addrs, _authorized));
+        proposalId = _createProposal(msg.sender, address(this), data);
         emit ProposalForwarderUpdateProposed(proposalId, _addrs, _authorized);
     }
 
@@ -226,8 +226,8 @@ contract GovernanceCouncil is IGovernanceCouncil {
         bool[] calldata _authorized
     ) external returns (uint256 proposalId) {
         if (_targets.length != _selectors.length || _targets.length != _authorized.length) revert InvalidLength();
-        bytes memory data = abi.encode(_targets, _selectors, _authorized);
-        proposalId = _createProposal(msg.sender, address(0), data, ProposalType.FastPassUpdate);
+        bytes memory data = abi.encodeCall(this.updateFastPass, (_targets, _selectors, _authorized));
+        proposalId = _createProposal(msg.sender, address(this), data);
         emit FastPassUpdateProposed(proposalId, _targets, _selectors, _authorized);
     }
 
@@ -242,8 +242,14 @@ contract GovernanceCouncil is IGovernanceCouncil {
         external
         returns (uint256 proposalId)
     {
-        bytes memory data = abi.encode(_receiver, _token, _amount);
-        proposalId = _createProposal(msg.sender, address(0), data, ProposalType.TokenTransfer);
+        bytes memory data;
+        address target = address(this);
+        if (_token == address(0)) {
+            data = abi.encodeCall(this.transferNative, (payable(_receiver), _amount));
+        } else {
+            data = abi.encodeCall(this.transferERC20, (_token, _receiver, _amount));
+        }
+        proposalId = _createProposal(msg.sender, target, data);
         emit TokenTransferProposed(proposalId, _receiver, _token, _amount);
     }
 
@@ -252,10 +258,9 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _proposer The address of the proposer
      * @param _target The target contract address for the proposal
      * @param _data The encoded function call data
-     * @param _type The type of the proposal
      * @return proposalId The ID of the created proposal
      */
-    function _createProposal(address _proposer, address _target, bytes memory _data, ProposalType _type)
+    function _createProposal(address _proposer, address _target, bytes memory _data)
         private
         returns (uint256 proposalId)
     {
@@ -263,10 +268,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
         proposalId = nextProposalId;
         nextProposalId += 1;
         Proposal storage p = proposals[proposalId];
-        p.dataHash = keccak256(abi.encodePacked(_type, _target, _data));
+        p.dataHash = keccak256(abi.encodePacked(_target, _data));
         p.deadline = block.timestamp + params[Param.ActivePeriod];
         p.votes[_proposer] = true;
-        emit ProposalCreated(proposalId, _type, _target, _data, p.deadline, _proposer);
+        emit ProposalCreated(proposalId, _target, _data, p.deadline, _proposer);
     }
 
     // ============================================================================================
@@ -305,93 +310,63 @@ contract GovernanceCouncil is IGovernanceCouncil {
     /**
      * @notice Executes a proposal if it has sufficient votes and is still active
      * @param _proposalId The ID of the proposal to execute
-     * @param _type The type of the proposal (must match the original)
      * @param _target The target contract address (must match the original)
      * @param _data The encoded function call data (must match the original)
      */
-    function executeProposal(uint256 _proposalId, ProposalType _type, address _target, bytes calldata _data) public {
+    function executeProposal(uint256 _proposalId, address _target, bytes calldata _data) public {
         if (!voters.contains(msg.sender)) revert OnlyVoterCanExecuteProposal();
         Proposal storage p = proposals[_proposalId];
         if (block.timestamp >= p.deadline) revert DeadlinePassed();
-        if (keccak256(abi.encodePacked(_type, _target, _data)) != p.dataHash) revert DataHashMismatch();
+        if (keccak256(abi.encodePacked(_target, _data)) != p.dataHash) revert DataHashMismatch();
 
         // Prevent reentrancy by setting deadline to 0 before external calls
         p.deadline = 0;
 
         // Executor automatically votes yes
         p.votes[msg.sender] = true;
-        (,, bool pass) = countVotes(_proposalId, _type, _target, bytes4(_data[:4]));
+        (,, bool pass) = countVotes(_proposalId, _target, bytes4(_data[:4]));
         if (!pass) revert NotEnoughVotes();
 
-        // Execute the proposal based on its type
-        _executeProposalByType(_type, _target, _data);
+        // Execute external call (self-targeted calls go through onlySelf gates)
+        (bool success, bytes memory res) = _target.call(_data);
+        if (!success) {
+            assembly {
+                revert(add(res, 0x20), mload(res))
+            }
+        }
         emit ProposalExecuted(_proposalId);
     }
 
     /**
      * @notice Batch executes proposals
      * @param _proposalIds The IDs of the proposals to execute
-     * @param _types The types of the proposals (must match the original)
      * @param _targets The target contract addresses (must match the original)
      * @param _datas The encoded function call datas (must match the original)
      */
-    function executeProposals(
-        uint256[] calldata _proposalIds,
-        ProposalType[] calldata _types,
-        address[] calldata _targets,
-        bytes[] calldata _datas
-    ) external {
+    function executeProposals(uint256[] calldata _proposalIds, address[] calldata _targets, bytes[] calldata _datas)
+        external
+    {
         uint256 numProposals = _proposalIds.length;
-        if (numProposals != _types.length || numProposals != _targets.length || numProposals != _datas.length) {
+        if (numProposals != _targets.length || numProposals != _datas.length) {
             revert InvalidLength();
         }
         for (uint256 i = 0; i < numProposals; i++) {
-            executeProposal(_proposalIds[i], _types[i], _targets[i], _datas[i]);
+            executeProposal(_proposalIds[i], _targets[i], _datas[i]);
         }
+    }
+    // ============================================================================================
+    // ONLY-SELF GOVERNANCE ACTIONS
+    // ============================================================================================
+
+    modifier onlySelf() {
+        require(msg.sender == address(this), "onlySelf");
+        _;
     }
 
     /**
-     * @notice Executes proposal based on its type
-     * @param _type The type of proposal to execute
-     * @param _target The target address for external proposals
-     * @param _data The proposal data
+     * @notice Update a governance parameter
      */
-    function _executeProposalByType(ProposalType _type, address _target, bytes calldata _data) private {
-        if (_type == ProposalType.External) {
-            _executeExternal(_target, _data);
-        } else if (_type == ProposalType.ParamUpdate) {
-            _executeParamUpdate(_data);
-        } else if (_type == ProposalType.VoterUpdate) {
-            _executeVoterUpdate(_data);
-        } else if (_type == ProposalType.ProposalForwarderUpdate) {
-            _executeProposalForwarderUpdate(_data);
-        } else if (_type == ProposalType.FastPassUpdate) {
-            _executeFastPassUpdate(_data);
-        } else if (_type == ProposalType.TokenTransfer) {
-            _executeTokenTransfer(_data);
-        }
-    }
-
-    /**
-     * @notice Executes external proposal (contract call)
-     */
-    function _executeExternal(address _target, bytes calldata _data) private {
-        (bool success, bytes memory res) = _target.call(_data);
-        if (!success) {
-            assembly {
-                // revert with the exact returndata from the failed call
-                revert(add(res, 0x20), mload(res))
-            }
-        }
-        bytes4 selector = _data.length >= 4 ? bytes4(_data[:4]) : bytes4(0);
-        emit ExternalCallExecuted(_target, selector);
-    }
-
-    /**
-     * @notice Executes parameter change proposal
-     */
-    function _executeParamUpdate(bytes calldata _data) private {
-        (Param name, uint256 value) = abi.decode(_data, (Param, uint256));
+    function updateParam(Param name, uint256 value) external onlySelf {
         uint256 old = params[name];
         params[name] = value;
         if (name == Param.ActivePeriod) {
@@ -405,10 +380,9 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
-     * @notice Executes voter update proposal
+     * @notice Update voters and their powers (0 power removes)
      */
-    function _executeVoterUpdate(bytes calldata _data) private {
-        (address[] memory addrs, uint256[] memory powers) = abi.decode(_data, (address[], uint256[]));
+    function updateVoters(address[] calldata addrs, uint256[] calldata powers) external onlySelf {
         for (uint256 i = 0; i < addrs.length; i++) {
             (bool exists, uint256 oldPower) = voters.tryGet(addrs[i]);
             if (powers[i] > 0) {
@@ -425,10 +399,9 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
-     * @notice Executes forwarder update proposal
+     * @notice Update proposal forwarders
      */
-    function _executeProposalForwarderUpdate(bytes calldata _data) private {
-        (address[] memory addrs, bool[] memory ops) = abi.decode(_data, (address[], bool[]));
+    function updateProposalForwarders(address[] calldata addrs, bool[] calldata ops) external onlySelf {
         for (uint256 i = 0; i < addrs.length; i++) {
             if (ops[i]) {
                 proposerForwarders.add(addrs[i]);
@@ -440,11 +413,12 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
-     * @notice Executes fast-pass authorization update proposal
+     * @notice Update fast-pass authorizations
      */
-    function _executeFastPassUpdate(bytes calldata _data) private {
-        (address[] memory targets, bytes4[] memory selectors, bool[] memory authorized) =
-            abi.decode(_data, (address[], bytes4[], bool[]));
+    function updateFastPass(address[] calldata targets, bytes4[] calldata selectors, bool[] calldata authorized)
+        external
+        onlySelf
+    {
         for (uint256 i = 0; i < targets.length; i++) {
             bytes32 key = _packFastPassKey(targets[i], selectors[i]);
             if (authorized[i]) {
@@ -457,29 +431,27 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
-     * @notice Executes token transfer proposal
+     * @notice Transfer native token
      */
-    function _executeTokenTransfer(bytes calldata _data) private {
-        (address receiver, address token, uint256 amount) = abi.decode(_data, (address, address, uint256));
-        if (token == address(0)) {
-            (bool sent,) = receiver.call{value: amount, gas: nativeTokenTransferGas}("");
-            if (!sent) revert FailedToSendNativeToken();
-        } else {
-            IERC20(token).safeTransfer(receiver, amount);
-        }
-        emit TokenTransferred(receiver, token, amount);
+    function transferNative(address payable receiver, uint256 amount) external onlySelf {
+        (bool sent,) = receiver.call{value: amount, gas: nativeTokenTransferGas}("");
+        if (!sent) revert FailedToSendNativeToken();
+        emit TokenTransferred(receiver, address(0), amount);
     }
 
-    // ============================================================================================
-    // CONFIGURATION
-    // ============================================================================================
+    /**
+     * @notice Transfer ERC20 token
+     */
+    function transferERC20(address token, address receiver, uint256 amount) external onlySelf {
+        IERC20(token).safeTransfer(receiver, amount);
+        emit TokenTransferred(receiver, token, amount);
+    }
 
     /**
      * @notice Sets the gas limit for native token transfers to prevent griefing attacks
      * @param _gasUsed The gas limit to use for native token transfers
      */
-    function setNativeTokenTransferGas(uint256 _gasUsed) external {
-        if (!voters.contains(msg.sender)) revert InvalidCaller();
+    function updateNativeTokenTransferGas(uint256 _gasUsed) external onlySelf {
         uint256 old = nativeTokenTransferGas;
         nativeTokenTransferGas = _gasUsed;
         emit NativeTokenTransferGasUpdated(old, _gasUsed);
@@ -562,7 +534,10 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @return yesVotes The total voting power of "yes" votes
      * @return pass Whether the proposal has enough votes to pass
      */
-    function countVotes(uint256 _proposalId, ProposalType _type, address _target, bytes4 _selector)
+    /**
+     * @notice Counts votes and determines pass/fail for a proposal, using target-based threshold rules
+     */
+    function countVotes(uint256 _proposalId, address _target, bytes4 _selector)
         public
         view
         returns (uint256 totalPower, uint256 yesVotes, bool pass)
@@ -570,17 +545,18 @@ contract GovernanceCouncil is IGovernanceCouncil {
         // Use the simplified version to get vote counts
         (totalPower, yesVotes) = countVotes(_proposalId);
 
-        // Determine threshold based on proposal type and authorization
+        // Determine threshold based on target and authorization
         uint256 threshold;
-        if (_type == ProposalType.External) {
+        if (_target == address(this)) {
+            // Self-targeted calls always require quorum; ignore fast-pass
+            threshold = params[Param.QuorumThreshold];
+        } else {
             // Auto-detect if fast-pass is authorized for this function
             if (isFastPassAuthorized(_target, _selector)) {
                 threshold = params[Param.FastPassThreshold];
             } else {
                 threshold = params[Param.QuorumThreshold];
             }
-        } else {
-            threshold = params[Param.QuorumThreshold];
         }
 
         // NOTE: rounding: yesVotes * 100 >= totalPower * threshold.
@@ -661,20 +637,5 @@ contract GovernanceCouncil is IGovernanceCouncil {
     function _removeVoter(address _voter) private {
         if (!voters.contains(_voter)) revert NotVoter();
         voters.remove(_voter);
-    }
-
-    /**
-     * @notice Extracts revert message from failed external call
-     * @param _returnData The return data from the failed call
-     * @return revertMessage The revert message string
-     */
-    function _getRevertMsg(bytes memory _returnData) private pure returns (string memory revertMessage) {
-        // If the _returnData length is less than 68, then the transaction failed silently (without a revert message)
-        if (_returnData.length < 68) return "Transaction reverted silently";
-        assembly {
-            // Slice the sighash
-            _returnData := add(_returnData, 0x04)
-        }
-        return abi.decode(_returnData, (string)); // All that remains is the revert string
     }
 }
