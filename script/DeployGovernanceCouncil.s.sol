@@ -50,7 +50,7 @@ contract DeployGovernanceCouncil is Script {
         require(voters.length == powers.length, "Deploy: voters/powers length mismatch");
 
         vm.startBroadcast(deployerKey);
-        council = new GovernanceCouncil(voters, powers, forwarders, activePeriod, quorumThreshold, fastPassThreshold);
+        council = new GovernanceCouncil(voters, powers, forwarders, activePeriod, quorumThreshold);
         vm.stopBroadcast();
 
         console2.log("GovernanceCouncil deployed at:", address(council));

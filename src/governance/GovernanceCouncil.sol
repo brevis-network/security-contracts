@@ -27,7 +27,6 @@ contract GovernanceCouncil is IGovernanceCouncil {
     using SafeERC20 for IERC20;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using EnumerableSet for EnumerableSet.AddressSet;
-    using EnumerableSet for EnumerableSet.Bytes32Set;
 
     // ============================================================================================
     // CONSTANTS
@@ -46,8 +45,11 @@ contract GovernanceCouncil is IGovernanceCouncil {
     // STATE VARIABLES
     // ============================================================================================
 
-    /// Mapping of parameter names to their current values
-    mapping(Param => uint256) public params;
+    /// Active period for proposals (seconds)
+    uint256 public activePeriod;
+
+    /// Quorum threshold (percentage out of 100)
+    uint256 public quorumThreshold;
 
     /// Proposal data structure containing hash, deadline, and votes
     struct Proposal {
@@ -71,13 +73,6 @@ contract GovernanceCouncil is IGovernanceCouncil {
     /// See ./proposal-forwarders/AccessControlForwarder.sol for example.
     EnumerableSet.AddressSet proposerForwarders;
 
-    /// Fast-pass authorization mapping using a reversible packed key:
-    /// key = bytes32( (uint256(uint160(target)) << 32) | uint32(selector) )
-    /// - High 160 bits: target address
-    /// - Low 32 bits: function selector (bytes4)
-    /// Use selector = bytes4(0) to wildcard all functions on a target.
-    EnumerableSet.Bytes32Set authorizedFastPass;
-
     /// Gas limit for native token transfers to prevent griefing attacks
     uint256 public nativeTokenTransferGas = 50000;
 
@@ -91,32 +86,30 @@ contract GovernanceCouncil is IGovernanceCouncil {
      * @param _powers Array of voting powers corresponding to each voter
      * @param _forwarders Array of trusted proposal forwarder contract addresses
      * @param _activePeriod Duration (in seconds) for which proposals remain active
-     * @param _quorumThreshold Percentage threshold for regular proposals (out of 100)
-     * @param _fastPassThreshold Percentage threshold for fast-pass proposals (out of 100)
+     * @param _quorumThreshold Percentage threshold for proposals (out of 100)
      */
     constructor(
         address[] memory _voters,
         uint256[] memory _powers,
         address[] memory _forwarders,
         uint256 _activePeriod,
-        uint256 _quorumThreshold,
-        uint256 _fastPassThreshold
+        uint256 _quorumThreshold
     ) {
         if (_voters.length == 0 || _voters.length != _powers.length) revert InvalidLength();
         if (_activePeriod > MAX_ACTIVE_PERIOD || _activePeriod < MIN_ACTIVE_PERIOD) revert InvalidActivePeriod();
-        if (_quorumThreshold >= THRESHOLD_DECIMAL || _fastPassThreshold > _quorumThreshold) {
+        if (_quorumThreshold >= THRESHOLD_DECIMAL || _quorumThreshold == 0) {
             revert InvalidThreshold();
         }
         for (uint256 i = 0; i < _voters.length; i++) {
-            _setVoter(_voters[i], _powers[i]);
+            if (_powers[i] == 0) revert ZeroPower();
+            voters.set(_voters[i], _powers[i]);
         }
         for (uint256 i = 0; i < _forwarders.length; i++) {
             proposerForwarders.add(_forwarders[i]);
         }
-        params[Param.ActivePeriod] = _activePeriod;
-        params[Param.QuorumThreshold] = _quorumThreshold;
-        params[Param.FastPassThreshold] = _fastPassThreshold;
-        emit Initiated(_voters, _powers, _forwarders, _activePeriod, _quorumThreshold, _fastPassThreshold);
+        activePeriod = _activePeriod;
+        quorumThreshold = _quorumThreshold;
+        emit Initiated(_voters, _powers, _forwarders, _activePeriod, _quorumThreshold);
     }
 
     // ============================================================================================
@@ -170,15 +163,25 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
-     * @notice Creates a proposal to change a governance parameter
-     * @param _name The parameter to change
-     * @param _value The new value for the parameter
+     * @notice Creates a proposal to update the Active Period parameter
+     * @param _newActivePeriod The new active period (in seconds)
      * @return proposalId The ID of the created proposal
      */
-    function proposeParamUpdate(Param _name, uint256 _value) external returns (uint256 proposalId) {
-        bytes memory data = abi.encodeCall(this.updateParam, (_name, _value));
+    function proposeActivePeriodUpdate(uint256 _newActivePeriod) external returns (uint256 proposalId) {
+        bytes memory data = abi.encodeCall(this.updateActivePeriod, (_newActivePeriod));
         proposalId = _createProposal(msg.sender, address(this), data);
-        emit ParamUpdateProposed(proposalId, _name, _value);
+        emit ActivePeriodUpdateProposed(proposalId, _newActivePeriod);
+    }
+
+    /**
+     * @notice Creates a proposal to update the Quorum Threshold parameter
+     * @param _newQuorumThreshold The new quorum threshold (percentage out of 100)
+     * @return proposalId The ID of the created proposal
+     */
+    function proposeQuorumThresholdUpdate(uint256 _newQuorumThreshold) external returns (uint256 proposalId) {
+        bytes memory data = abi.encodeCall(this.updateQuorumThreshold, (_newQuorumThreshold));
+        proposalId = _createProposal(msg.sender, address(this), data);
+        emit QuorumThresholdUpdateProposed(proposalId, _newQuorumThreshold);
     }
 
     /**
@@ -214,24 +217,6 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
-     * @notice Creates a proposal to add or remove fast-pass authorizations
-     * @param _targets Array of target contract addresses
-     * @param _selectors Array of function selectors (use bytes4(0) for all functions)
-     * @param _authorized Array of authorization status (true = authorize, false = revoke)
-     * @return proposalId The ID of the created proposal
-     */
-    function proposeFastPassUpdate(
-        address[] calldata _targets,
-        bytes4[] calldata _selectors,
-        bool[] calldata _authorized
-    ) external returns (uint256 proposalId) {
-        if (_targets.length != _selectors.length || _targets.length != _authorized.length) revert InvalidLength();
-        bytes memory data = abi.encodeCall(this.updateFastPass, (_targets, _selectors, _authorized));
-        proposalId = _createProposal(msg.sender, address(this), data);
-        emit FastPassUpdateProposed(proposalId, _targets, _selectors, _authorized);
-    }
-
-    /**
      * @notice Creates a proposal to transfer tokens from the contract
      * @param _receiver The address to receive the tokens
      * @param _token The token contract address (use address(0) for native tokens)
@@ -254,6 +239,17 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
+     * @notice Creates a proposal to update the native token transfer gas limit
+     * @param _newGasLimit The new gas limit for native token transfers
+     * @return proposalId The ID of the created proposal
+     */
+    function proposeNativeTokenTransferGasUpdate(uint256 _newGasLimit) external returns (uint256 proposalId) {
+        bytes memory data = abi.encodeCall(this.updateNativeTokenTransferGas, (_newGasLimit));
+        proposalId = _createProposal(msg.sender, address(this), data);
+        emit NativeTokenTransferGasUpdateProposed(proposalId, _newGasLimit);
+    }
+
+    /**
      * @notice Creates a proposal and automatically votes yes for the proposer
      * @param _proposer The address of the proposer
      * @param _target The target contract address for the proposal
@@ -269,7 +265,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
         nextProposalId += 1;
         Proposal storage p = proposals[proposalId];
         p.dataHash = keccak256(abi.encodePacked(_target, _data));
-        p.deadline = block.timestamp + params[Param.ActivePeriod];
+        p.deadline = block.timestamp + activePeriod;
         p.votes[_proposer] = true;
         emit ProposalCreated(proposalId, _target, _data, p.deadline, _proposer);
     }
@@ -324,7 +320,7 @@ contract GovernanceCouncil is IGovernanceCouncil {
 
         // Executor automatically votes yes
         p.votes[msg.sender] = true;
-        (,, bool pass) = countVotes(_proposalId, _target, bytes4(_data[:4]));
+        (,, bool pass) = countVotes(_proposalId);
         if (!pass) revert NotEnoughVotes();
 
         // Execute external call (self-targeted calls go through onlySelf gates)
@@ -346,14 +342,14 @@ contract GovernanceCouncil is IGovernanceCouncil {
     function executeProposals(uint256[] calldata _proposalIds, address[] calldata _targets, bytes[] calldata _datas)
         external
     {
-        uint256 numProposals = _proposalIds.length;
-        if (numProposals != _targets.length || numProposals != _datas.length) {
+        if (_proposalIds.length != _targets.length || _proposalIds.length != _datas.length) {
             revert InvalidLength();
         }
-        for (uint256 i = 0; i < numProposals; i++) {
+        for (uint256 i = 0; i < _proposalIds.length; i++) {
             executeProposal(_proposalIds[i], _targets[i], _datas[i]);
         }
     }
+
     // ============================================================================================
     // ONLY-SELF GOVERNANCE ACTIONS
     // ============================================================================================
@@ -366,17 +362,21 @@ contract GovernanceCouncil is IGovernanceCouncil {
     /**
      * @notice Update a governance parameter
      */
-    function updateParam(Param name, uint256 value) external onlySelf {
-        uint256 old = params[name];
-        params[name] = value;
-        if (name == Param.ActivePeriod) {
-            if (value > MAX_ACTIVE_PERIOD || value < MIN_ACTIVE_PERIOD) revert InvalidActivePeriod();
-        } else if (
-            params[Param.QuorumThreshold] < params[Param.FastPassThreshold] || value >= THRESHOLD_DECIMAL || value == 0
-        ) {
-            revert InvalidThreshold();
-        }
-        emit ParamUpdated(name, old, value);
+    function updateActivePeriod(uint256 value) external onlySelf {
+        if (value > MAX_ACTIVE_PERIOD || value < MIN_ACTIVE_PERIOD) revert InvalidActivePeriod();
+        uint256 old = activePeriod;
+        activePeriod = value;
+        emit ActivePeriodUpdated(old, value);
+    }
+
+    /**
+     * @notice Update a governance parameter
+     */
+    function updateQuorumThreshold(uint256 value) external onlySelf {
+        if (value >= THRESHOLD_DECIMAL || value == 0) revert InvalidThreshold();
+        uint256 old = quorumThreshold;
+        quorumThreshold = value;
+        emit QuorumThresholdUpdated(old, value);
     }
 
     /**
@@ -386,13 +386,11 @@ contract GovernanceCouncil is IGovernanceCouncil {
         for (uint256 i = 0; i < addrs.length; i++) {
             (bool exists, uint256 oldPower) = voters.tryGet(addrs[i]);
             if (powers[i] > 0) {
-                _setVoter(addrs[i], powers[i]);
+                voters.set(addrs[i], powers[i]);
                 emit VoterUpdated(addrs[i], exists ? oldPower : 0, powers[i]);
-            } else {
-                if (exists) {
-                    _removeVoter(addrs[i]);
-                    emit VoterUpdated(addrs[i], oldPower, 0);
-                }
+            } else if (exists) {
+                voters.remove(addrs[i]);
+                emit VoterUpdated(addrs[i], oldPower, 0);
             }
         }
         if (voters.length() == 0) revert NoVotersRemaining();
@@ -409,24 +407,6 @@ contract GovernanceCouncil is IGovernanceCouncil {
                 proposerForwarders.remove(addrs[i]);
             }
             emit ProposalForwarderUpdated(addrs[i], ops[i]);
-        }
-    }
-
-    /**
-     * @notice Update fast-pass authorizations
-     */
-    function updateFastPass(address[] calldata targets, bytes4[] calldata selectors, bool[] calldata authorized)
-        external
-        onlySelf
-    {
-        for (uint256 i = 0; i < targets.length; i++) {
-            bytes32 key = _packFastPassKey(targets[i], selectors[i]);
-            if (authorized[i]) {
-                authorizedFastPass.add(key);
-            } else {
-                authorizedFastPass.remove(key);
-            }
-            emit FastPassAuthorizationUpdated(targets[i], selectors[i], authorized[i]);
         }
     }
 
@@ -506,61 +486,20 @@ contract GovernanceCouncil is IGovernanceCouncil {
     }
 
     /**
-     * @notice Counts the votes for a proposal (simplified version without threshold calculation)
-     * @dev This function doesn't determine if the proposal passes since it doesn't know the proposal type
+     * @notice Counts the votes for a proposal and determines if it passes, using a single quorum threshold
      * @param _proposalId The ID of the proposal to count votes for
      * @return totalPower The total voting power of all voters
      * @return yesVotes The total voting power of "yes" votes
+     * @return pass Whether the proposal has enough votes to pass
      */
-    function countVotes(uint256 _proposalId) public view returns (uint256 totalPower, uint256 yesVotes) {
+    function countVotes(uint256 _proposalId) public view returns (uint256 totalPower, uint256 yesVotes, bool pass) {
         uint256 length = voters.length();
         for (uint256 i = 0; i < length; i++) {
             (address voter, uint256 power) = voters.at(i);
             if (getVote(_proposalId, voter)) yesVotes += power;
             totalPower += power;
         }
-    }
-
-    /**
-     * @notice Counts the votes for a proposal and determines if it passes
-     * @dev Threshold classification for External proposals is evaluated only at execution;
-     *      changes in fast-pass authorization after creation affect required votes.
-     *
-     * @param _proposalId The ID of the proposal to count votes for
-     * @param _type The type of the proposal (affects threshold calculation)
-     * @param _target The target contract address (only used for External proposals)
-     * @param _selector The function selector (only used for External proposals)
-     * @return totalPower The total voting power of all voters
-     * @return yesVotes The total voting power of "yes" votes
-     * @return pass Whether the proposal has enough votes to pass
-     */
-    /**
-     * @notice Counts votes and determines pass/fail for a proposal, using target-based threshold rules
-     */
-    function countVotes(uint256 _proposalId, address _target, bytes4 _selector)
-        public
-        view
-        returns (uint256 totalPower, uint256 yesVotes, bool pass)
-    {
-        // Use the simplified version to get vote counts
-        (totalPower, yesVotes) = countVotes(_proposalId);
-
-        // Determine threshold based on target and authorization
-        uint256 threshold;
-        if (_target == address(this)) {
-            // Self-targeted calls always require quorum; ignore fast-pass
-            threshold = params[Param.QuorumThreshold];
-        } else {
-            // Auto-detect if fast-pass is authorized for this function
-            if (isFastPassAuthorized(_target, _selector)) {
-                threshold = params[Param.FastPassThreshold];
-            } else {
-                threshold = params[Param.QuorumThreshold];
-            }
-        }
-
-        // NOTE: rounding: yesVotes * 100 >= totalPower * threshold.
-        // Example: 5 x 10k power humans + machine (power 1) => machine presence/vote doesn't change 3-of-5 human quorum.
+        uint256 threshold = quorumThreshold;
         pass = (yesVotes >= (totalPower * threshold) / THRESHOLD_DECIMAL);
     }
 
@@ -579,63 +518,5 @@ contract GovernanceCouncil is IGovernanceCouncil {
      */
     function getProposalForwarders() public view returns (address[] memory forwarders) {
         return proposerForwarders.values();
-    }
-
-    /**
-     * @notice Checks if a specific function on a target is authorized for fast-pass
-     * @param _target The target contract address
-     * @param _selector The function selector (use bytes4(0) to check for wildcard)
-     * @return isAuthorized True if the function is authorized for fast-pass
-     */
-    function isFastPassAuthorized(address _target, bytes4 _selector) public view returns (bool isAuthorized) {
-        bytes32 key = _packFastPassKey(_target, _selector);
-        if (authorizedFastPass.contains(key)) return true;
-        // Check wildcard (selector = 0x00000000)
-        bytes32 wildcardKey = _packFastPassKey(_target, bytes4(0));
-        return authorizedFastPass.contains(wildcardKey);
-    }
-
-    /**
-     * @notice Returns all fast-pass authorization keys
-     * @return authKeys Array of all authorization keys. See {_packFastPassKey}.
-     */
-    function getFastPassAuthorizations() public view returns (bytes32[] memory authKeys) {
-        return authorizedFastPass.values();
-    }
-
-    // ============================================================================================
-    // INTERNAL HELPER FUNCTIONS
-    // ============================================================================================
-
-    /**
-     * @notice Packs (target, selector) into a reversible bytes32 key used in `authorizedFastPass`.
-     * Layout (left -> right / high -> low bits): [ 64 bits zero ][ 160 bits target ][ 32 bits selector ]
-     * Example:
-     *   target   = 0x1234567890Abcdef1234567890abCdef12345678
-     *   selector = 0xdeadbeef
-     *   packed   = 0x00000000000000001234567890abcdef1234567890abcdef12345678deadbeef
-     * Decoding reverses: selector = low 4 bytes; target = (key >> 32) & 0xffffffffffffffffffffffffffffffffffffffff
-     */
-    function _packFastPassKey(address target, bytes4 selector) internal pure returns (bytes32) {
-        return bytes32((uint256(uint160(target)) << 32) | uint256(uint32(selector)));
-    }
-
-    /**
-     * @notice Adds a new voter or updates an existing voter's power
-     * @param _voter The address of the voter to add/update
-     * @param _power The voting power to assign (must be > 0)
-     */
-    function _setVoter(address _voter, uint256 _power) private {
-        if (_power == 0) revert ZeroPower();
-        voters.set(_voter, _power);
-    }
-
-    /**
-     * @notice Removes a voter from the governance system
-     * @param _voter The address of the voter to remove
-     */
-    function _removeVoter(address _voter) private {
-        if (!voters.contains(_voter)) revert NotVoter();
-        voters.remove(_voter);
     }
 }

@@ -69,7 +69,6 @@ contract CouncilTest is Test {
     // Governance parameters
     uint256 public constant ACTIVE_PERIOD = 7200; // 2 hours
     uint256 public constant QUORUM_THRESHOLD = 60; // 60%
-    uint256 public constant FAST_PASS_THRESHOLD = 40; // 40%
 
     function setUp() public virtual {
         // Create test addresses
@@ -94,8 +93,7 @@ contract CouncilTest is Test {
         forwarders[0] = forwarder1;
 
         // Deploy contracts
-        council =
-            new GovernanceCouncil(voters, powers, forwarders, ACTIVE_PERIOD, QUORUM_THRESHOLD, FAST_PASS_THRESHOLD);
+        council = new GovernanceCouncil(voters, powers, forwarders, ACTIVE_PERIOD, QUORUM_THRESHOLD);
 
         token = new MockToken();
         target = new MockTarget();
@@ -123,9 +121,8 @@ contract CouncilTest is Test {
         assertEq(powers[2], VOTER3_POWER);
 
         // Check parameters
-        assertEq(council.params(IGovernanceCouncil.Param.ActivePeriod), ACTIVE_PERIOD);
-        assertEq(council.params(IGovernanceCouncil.Param.QuorumThreshold), QUORUM_THRESHOLD);
-        assertEq(council.params(IGovernanceCouncil.Param.FastPassThreshold), FAST_PASS_THRESHOLD);
+        assertEq(council.activePeriod(), ACTIVE_PERIOD);
+        assertEq(council.quorumThreshold(), QUORUM_THRESHOLD);
 
         // Check forwarders
         assertTrue(council.isProposalForwarder(forwarder1));
@@ -139,7 +136,7 @@ contract CouncilTest is Test {
         address[] memory forwarders = new address[](0);
 
         vm.expectRevert(IGovernanceCouncil.InvalidLength.selector);
-        new GovernanceCouncil(voters, powers, forwarders, ACTIVE_PERIOD, QUORUM_THRESHOLD, FAST_PASS_THRESHOLD);
+        new GovernanceCouncil(voters, powers, forwarders, ACTIVE_PERIOD, QUORUM_THRESHOLD);
     }
 
     function testConstructorEmptyVoters() public {
@@ -148,7 +145,7 @@ contract CouncilTest is Test {
         address[] memory forwarders = new address[](0);
 
         vm.expectRevert(IGovernanceCouncil.InvalidLength.selector);
-        new GovernanceCouncil(voters, powers, forwarders, ACTIVE_PERIOD, QUORUM_THRESHOLD, FAST_PASS_THRESHOLD);
+        new GovernanceCouncil(voters, powers, forwarders, ACTIVE_PERIOD, QUORUM_THRESHOLD);
     }
 
     function testConstructorInvalidActivePeriod() public {
@@ -160,25 +157,11 @@ contract CouncilTest is Test {
 
         // Too short
         vm.expectRevert(IGovernanceCouncil.InvalidActivePeriod.selector);
-        new GovernanceCouncil(
-            voters,
-            powers,
-            forwarders,
-            3000, // < MIN_ACTIVE_PERIOD (3600)
-            QUORUM_THRESHOLD,
-            FAST_PASS_THRESHOLD
-        );
+        new GovernanceCouncil(voters, powers, forwarders, 3000, QUORUM_THRESHOLD);
 
         // Too long
         vm.expectRevert(IGovernanceCouncil.InvalidActivePeriod.selector);
-        new GovernanceCouncil(
-            voters,
-            powers,
-            forwarders,
-            2500000, // > MAX_ACTIVE_PERIOD (2419200)
-            QUORUM_THRESHOLD,
-            FAST_PASS_THRESHOLD
-        );
+        new GovernanceCouncil(voters, powers, forwarders, 2500000, QUORUM_THRESHOLD);
     }
 
     function testConstructorInvalidThreshold() public {
@@ -190,25 +173,9 @@ contract CouncilTest is Test {
 
         // Quorum threshold >= 100
         vm.expectRevert(IGovernanceCouncil.InvalidThreshold.selector);
-        new GovernanceCouncil(
-            voters,
-            powers,
-            forwarders,
-            ACTIVE_PERIOD,
-            100, // >= THRESHOLD_DECIMAL
-            FAST_PASS_THRESHOLD
-        );
+        new GovernanceCouncil(voters, powers, forwarders, ACTIVE_PERIOD, 100);
 
         // FastPass > Quorum
-        vm.expectRevert(IGovernanceCouncil.InvalidThreshold.selector);
-        new GovernanceCouncil(
-            voters,
-            powers,
-            forwarders,
-            ACTIVE_PERIOD,
-            40,
-            50 // > quorum threshold
-        );
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -243,13 +210,10 @@ contract CouncilTest is Test {
 
         // Also test other proposal types
         vm.prank(voter1);
-        uint256 paramProposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, 3600);
+        uint256 paramProposalId = council.proposeActivePeriodUpdate(3600);
 
-        bytes32 expectedParamHash = keccak256(
-            abi.encodePacked(
-                address(council), abi.encodeCall(council.updateParam, (IGovernanceCouncil.Param.ActivePeriod, 3600))
-            )
-        );
+        bytes32 expectedParamHash =
+            keccak256(abi.encodePacked(address(council), abi.encodeCall(council.updateActivePeriod, (3600))));
 
         // Verify param proposal hash
         (bytes32 actualParamHash,) = council.proposals(paramProposalId);
@@ -392,25 +356,28 @@ contract CouncilTest is Test {
         uint256 proposalId = council.createProposal(address(target), data);
 
         // Initial state: voter1 already voted yes (auto-vote)
-        (uint256 totalPower, uint256 yesVotes) = council.countVotes(proposalId);
+        (uint256 totalPower, uint256 yesVotes, bool pass) = council.countVotes(proposalId);
         assertEq(totalPower, TOTAL_POWER);
         assertEq(yesVotes, VOTER1_POWER);
+        assertFalse(pass);
 
         // Voter2 votes yes
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        (totalPower, yesVotes) = council.countVotes(proposalId);
+        (totalPower, yesVotes, pass) = council.countVotes(proposalId);
         assertEq(totalPower, TOTAL_POWER);
         assertEq(yesVotes, VOTER1_POWER + VOTER2_POWER);
+        assertTrue(pass);
 
         // Voter3 votes no
         vm.prank(voter3);
         council.voteProposal(proposalId, false);
 
-        (totalPower, yesVotes) = council.countVotes(proposalId);
+        (totalPower, yesVotes, pass) = council.countVotes(proposalId);
         assertEq(totalPower, TOTAL_POWER);
         assertEq(yesVotes, VOTER1_POWER + VOTER2_POWER);
+        assertTrue(pass);
     }
 
     function testCountVotesWithThreshold() public {
@@ -418,9 +385,8 @@ contract CouncilTest is Test {
         vm.prank(voter1);
         uint256 proposalId = council.createProposal(address(target), data);
 
-        // Should use quorum threshold (no fast-pass authorization)
-        (uint256 totalPower, uint256 yesVotes, bool pass) =
-            council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
+        // Should use quorum threshold
+        (uint256 totalPower, uint256 yesVotes, bool pass) = council.countVotes(proposalId);
 
         assertEq(totalPower, TOTAL_POWER);
         assertEq(yesVotes, VOTER1_POWER);
@@ -430,7 +396,7 @@ contract CouncilTest is Test {
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        (totalPower, yesVotes, pass) = council.countVotes(proposalId, address(target), MockTarget.setValue.selector);
+        (totalPower, yesVotes, pass) = council.countVotes(proposalId);
 
         assertEq(yesVotes, VOTER1_POWER + VOTER2_POWER);
         assertTrue(pass); // 150/175 = 85% > 60% quorum threshold

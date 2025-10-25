@@ -148,37 +148,36 @@ contract CouncilExecutionTest is CouncilTest {
 
     function testCreateAndExecuteParamUpdate() public {
         uint256 newActivePeriod = 10000;
-        uint256 oldActivePeriod = council.params(IGovernanceCouncil.Param.ActivePeriod);
+        uint256 oldActivePeriod = council.activePeriod();
 
         vm.prank(voter1);
-        uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, newActivePeriod);
+        uint256 proposalId = council.proposeActivePeriodUpdate(newActivePeriod);
 
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data =
-            abi.encodeCall(council.updateParam, (IGovernanceCouncil.Param.ActivePeriod, newActivePeriod));
+        bytes memory data = abi.encodeCall(council.updateActivePeriod, (newActivePeriod));
 
-        // Expect ParamUpdated event
+        // Expect ActivePeriodUpdated event
         vm.expectEmit(true, false, false, true);
-        emit IGovernanceCouncil.ParamUpdated(IGovernanceCouncil.Param.ActivePeriod, oldActivePeriod, newActivePeriod);
+        emit IGovernanceCouncil.ActivePeriodUpdated(oldActivePeriod, newActivePeriod);
 
         vm.prank(voter1);
         council.executeProposal(proposalId, address(council), data);
 
-        assertEq(council.params(IGovernanceCouncil.Param.ActivePeriod), newActivePeriod);
+        assertEq(council.activePeriod(), newActivePeriod);
     }
 
     function testExecuteParamUpdateInvalidActivePeriod() public {
         uint256 invalidPeriod = 1000; // Too short
 
         vm.prank(voter1);
-        uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, invalidPeriod);
+        uint256 proposalId = council.proposeActivePeriodUpdate(invalidPeriod);
 
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data = abi.encodeCall(council.updateParam, (IGovernanceCouncil.Param.ActivePeriod, invalidPeriod));
+        bytes memory data = abi.encodeCall(council.updateActivePeriod, (invalidPeriod));
 
         vm.expectRevert(IGovernanceCouncil.InvalidActivePeriod.selector);
         vm.prank(voter1);
@@ -189,13 +188,12 @@ contract CouncilExecutionTest is CouncilTest {
         uint256 invalidThreshold = 150; // > 100
 
         vm.prank(voter1);
-        uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.QuorumThreshold, invalidThreshold);
+        uint256 proposalId = council.proposeQuorumThresholdUpdate(invalidThreshold);
 
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data =
-            abi.encodeCall(council.updateParam, (IGovernanceCouncil.Param.QuorumThreshold, invalidThreshold));
+        bytes memory data = abi.encodeCall(council.updateQuorumThreshold, (invalidThreshold));
 
         vm.expectRevert(IGovernanceCouncil.InvalidThreshold.selector);
         vm.prank(voter1);

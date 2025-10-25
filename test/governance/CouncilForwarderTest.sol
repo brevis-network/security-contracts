@@ -118,8 +118,7 @@ contract CouncilForwarderTest is Test {
             weights,
             forwarders,
             3600, // 1 hour active period
-            60, // 60% quorum threshold
-            40 // 40% fast-pass threshold
+            60 // 60% quorum threshold
         );
 
         // Initialize forwarder with council
