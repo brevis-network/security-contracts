@@ -10,7 +10,7 @@ A collection of security-focused smart contracts for access control and governan
 - **PauserControl**: Lightweight circuit breaker
 
 ### Governance Council
-- **GovernanceCouncil**: Weighted council governance with quorum/fast‑pass dual thresholds
+- **GovernanceCouncil**: Weighted council governance with quorum-based approvals
 - **Proposal Forwarders**: Plug‑in helpers that build calldata and emit typed events for proposal creation
 
     *See [src/governance/README.md](src/governance/README.md) for GovernanceCouncil architecture and mechanics.*
