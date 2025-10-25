@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.20;
 
-import "../../access/interfaces/IOwnable.sol";
-import "../../access/interfaces/IAccessControl.sol";
-import "../IGovernanceCouncil.sol";
+import "../../../access/interfaces/IOwnable.sol";
+import "../../../access/interfaces/IAccessControl.sol";
+import "../../IGovernanceCouncil.sol";
 import "./ProposalForwarderBase.sol";
 
 // Assume the council governs contracts with AccessControl and Ownable functionality.

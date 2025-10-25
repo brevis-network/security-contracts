@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../../src/governance/GovernanceCouncil.sol";
-import "../../src/governance/proposal-forwarders/AccessControlForwarder.sol";
-import "../../src/governance/proposal-forwarders/ProxyAdminForwarder.sol";
-import "../../src/governance/proposal-forwarders/CommonProposalForwarder.sol";
+import "../../src/governance/proposal-forwarders/AdminProposalForwarder.sol";
+import "../../src/governance/proposal-forwarders/forwarders/AccessControlForwarder.sol";
+import "../../src/governance/proposal-forwarders/forwarders/ProxyAdminForwarder.sol";
 import "../../src/access/interfaces/IOwnable.sol";
 import "../../src/access/interfaces/IAccessControl.sol";
 import "../../src/governance/proposal-forwarders/interfaces/IProxyAdmin.sol";
@@ -67,7 +67,7 @@ contract MockProxyAdmin {
 
 contract CouncilForwarderTest is Test {
     GovernanceCouncil public council;
-    CommonProposalForwarder public forwarder;
+    AdminProposalForwarder public forwarder;
 
     MockOwnable public mockOwnable;
     MockAccessControl public mockAccessControl;
@@ -92,7 +92,7 @@ contract CouncilForwarderTest is Test {
         vm.startPrank(deployer);
 
         // Deploy unified forwarder first (no council set yet, initializer is deployer)
-        forwarder = new CommonProposalForwarder(address(0), deployer);
+        forwarder = new AdminProposalForwarder(address(0), deployer);
 
         // Deploy mock contracts
         mockOwnable = new MockOwnable();
@@ -134,7 +134,7 @@ contract CouncilForwarderTest is Test {
     function test_ProposalForwarderBase_InitCouncil_Success() public {
         // Deploy new forwarder
         vm.prank(deployer);
-        CommonProposalForwarder newForwarder = new CommonProposalForwarder(address(0), deployer);
+        AdminProposalForwarder newForwarder = new AdminProposalForwarder(address(0), deployer);
 
         assertEq(address(newForwarder.council()), address(0));
 
@@ -146,7 +146,7 @@ contract CouncilForwarderTest is Test {
 
     function test_ProposalForwarderBase_InitCouncil_OnlyInitializer() public {
         vm.prank(deployer);
-        CommonProposalForwarder newForwarder = new CommonProposalForwarder(address(0), deployer);
+        AdminProposalForwarder newForwarder = new AdminProposalForwarder(address(0), deployer);
 
         vm.prank(voter1);
         vm.expectRevert(ProposalForwarderBase.OnlyInitializerCanInit.selector);
@@ -345,7 +345,7 @@ contract CouncilForwarderTest is Test {
 
     function test_Integration_ForwarderCannotCreateProposalWithoutCouncilInit() public {
         vm.prank(deployer);
-        CommonProposalForwarder uninitForwarder = new CommonProposalForwarder(address(0), deployer);
+        AdminProposalForwarder uninitForwarder = new AdminProposalForwarder(address(0), deployer);
 
         // Should revert because council is not initialized (address(0))
         vm.prank(forwarder1);
@@ -355,7 +355,7 @@ contract CouncilForwarderTest is Test {
 
     function test_Integration_OnlyTrustedForwardersCanCreateProposals() public {
         vm.prank(deployer);
-        CommonProposalForwarder untrustedForwarder = new CommonProposalForwarder(address(0), deployer);
+        AdminProposalForwarder untrustedForwarder = new AdminProposalForwarder(address(0), deployer);
         vm.prank(deployer);
         untrustedForwarder.initCouncil(council);
 

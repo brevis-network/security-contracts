@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.20;
 
-import "../IGovernanceCouncil.sol";
-import "./interfaces/IProxyAdmin.sol";
+import "../../IGovernanceCouncil.sol";
+import "../interfaces/IProxyAdmin.sol";
 import "./ProposalForwarderBase.sol";
 
 // Assume the council owns a ProxyAdmin contract as target.
