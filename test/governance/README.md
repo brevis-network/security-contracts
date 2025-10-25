@@ -7,9 +7,9 @@ This directory contains tests for the GovernanceCouncil system.
 - **0 Tests Failed**## Test Structure
 
 ### Core Test Files
-- **`CouncilTest.sol`** - Foundation Tests - Basic functionality and setup
-- **`CouncilExecutionTest.sol`** - Execution & Governance - Full workflow testing
-- **`CouncilForwarderTest.sol`** - Proposal Forwarder - Proposal forwarder contracts
+- **`CouncilTest.t.sol`** - Foundation Tests - Basic functionality and setup
+- **`CouncilExecutionTest.t.sol`** - Execution & Governance - Full workflow testing
+- **`CouncilForwarderTest.t.sol`** - Proposal Forwarder - Proposal forwarder contracts
 
 ## Test Coverage Analysis
 
@@ -33,8 +33,6 @@ This directory contains tests for the GovernanceCouncil system.
 - Expired proposal handling
 - Vote counting (simple and threshold-based)
 - Data hash correctness verification for proposal integrity
-
- 
 
 ### Proposal Execution
 - External calls with success/failure handling
