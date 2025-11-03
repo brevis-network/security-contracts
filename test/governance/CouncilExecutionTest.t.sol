@@ -3,7 +3,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "./CouncilTest.sol";
+import "./CouncilTest.t.sol";
 
 contract CouncilExecutionTest is CouncilTest {
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -23,13 +23,11 @@ contract CouncilExecutionTest is CouncilTest {
         // Check target state before execution
         assertEq(target.value(), 0);
 
-        // Expect event emission
-        vm.expectEmit(true, true, false, true);
-        emit IGovernanceCouncil.ExternalCallExecuted(address(target), MockTarget.setValue.selector);
+        // No extra ExternalCallExecuted event; ProposalExecuted is sufficient
 
         // Execute proposal
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
 
         // Check target state after execution
         assertEq(target.value(), 42);
@@ -45,7 +43,7 @@ contract CouncilExecutionTest is CouncilTest {
 
         vm.expectRevert(IGovernanceCouncil.NotEnoughVotes.selector);
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
     }
 
     function testExecuteExternalProposalNonVoter() public {
@@ -56,7 +54,7 @@ contract CouncilExecutionTest is CouncilTest {
 
         vm.expectRevert(IGovernanceCouncil.OnlyVoterCanExecuteProposal.selector);
         vm.prank(nonVoter);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
     }
 
     function testExecuteExternalProposalExpired() public {
@@ -70,7 +68,7 @@ contract CouncilExecutionTest is CouncilTest {
 
         vm.expectRevert(IGovernanceCouncil.DeadlinePassed.selector);
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
     }
 
     function testExecuteExternalProposalDataHashMismatch() public {
@@ -85,12 +83,7 @@ contract CouncilExecutionTest is CouncilTest {
 
         vm.expectRevert(IGovernanceCouncil.DataHashMismatch.selector);
         vm.prank(voter1);
-        council.executeProposal(
-            proposalId,
-            IGovernanceCouncil.ProposalType.External,
-            address(target),
-            wrongData // Wrong data
-        );
+        council.executeProposal(proposalId, address(target), wrongData); // Wrong data
     }
 
     function testExecuteExternalProposalRevertingCall() public {
@@ -105,7 +98,7 @@ contract CouncilExecutionTest is CouncilTest {
         // External call now bubbles the exact revert data from target
         vm.expectRevert(abi.encodeWithSignature("Error(string)", "Mock revert"));
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
     }
 
     function testExecuteExternalProposalAutoVoteAtExecution() public {
@@ -123,7 +116,7 @@ contract CouncilExecutionTest is CouncilTest {
 
         // Execute - should auto-vote yes for executor
         vm.prank(voter2);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
 
         // Executor should now have yes vote
         assertTrue(council.getVote(proposalId, voter2));
@@ -141,12 +134,12 @@ contract CouncilExecutionTest is CouncilTest {
 
         // Execute first time
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
 
         // Try to execute again - should fail because deadline was set to 0
         vm.expectRevert(IGovernanceCouncil.DeadlinePassed.selector);
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.External, address(target), data);
+        council.executeProposal(proposalId, address(target), data);
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -155,56 +148,56 @@ contract CouncilExecutionTest is CouncilTest {
 
     function testCreateAndExecuteParamUpdate() public {
         uint256 newActivePeriod = 10000;
-        uint256 oldActivePeriod = council.params(IGovernanceCouncil.Param.ActivePeriod);
+        uint256 oldActivePeriod = council.activePeriod();
 
         vm.prank(voter1);
-        uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, newActivePeriod);
+        uint256 proposalId = council.proposeActivePeriodUpdate(newActivePeriod);
 
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data = abi.encode(IGovernanceCouncil.Param.ActivePeriod, newActivePeriod);
+        bytes memory data = abi.encodeCall(council.updateActivePeriod, (newActivePeriod));
 
-        // Expect ParamUpdated event
+        // Expect ActivePeriodUpdated event
         vm.expectEmit(true, false, false, true);
-        emit IGovernanceCouncil.ParamUpdated(IGovernanceCouncil.Param.ActivePeriod, oldActivePeriod, newActivePeriod);
+        emit IGovernanceCouncil.ActivePeriodUpdated(oldActivePeriod, newActivePeriod);
 
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.ParamUpdate, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
 
-        assertEq(council.params(IGovernanceCouncil.Param.ActivePeriod), newActivePeriod);
+        assertEq(council.activePeriod(), newActivePeriod);
     }
 
     function testExecuteParamUpdateInvalidActivePeriod() public {
         uint256 invalidPeriod = 1000; // Too short
 
         vm.prank(voter1);
-        uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.ActivePeriod, invalidPeriod);
+        uint256 proposalId = council.proposeActivePeriodUpdate(invalidPeriod);
 
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data = abi.encode(IGovernanceCouncil.Param.ActivePeriod, invalidPeriod);
+        bytes memory data = abi.encodeCall(council.updateActivePeriod, (invalidPeriod));
 
         vm.expectRevert(IGovernanceCouncil.InvalidActivePeriod.selector);
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.ParamUpdate, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
     }
 
     function testExecuteParamUpdateInvalidThreshold() public {
         uint256 invalidThreshold = 150; // > 100
 
         vm.prank(voter1);
-        uint256 proposalId = council.proposeParamUpdate(IGovernanceCouncil.Param.QuorumThreshold, invalidThreshold);
+        uint256 proposalId = council.proposeQuorumThresholdUpdate(invalidThreshold);
 
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data = abi.encode(IGovernanceCouncil.Param.QuorumThreshold, invalidThreshold);
+        bytes memory data = abi.encodeCall(council.updateQuorumThreshold, (invalidThreshold));
 
         vm.expectRevert(IGovernanceCouncil.InvalidThreshold.selector);
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.ParamUpdate, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -227,9 +220,9 @@ contract CouncilExecutionTest is CouncilTest {
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data = abi.encode(voters, powers);
+        bytes memory data = abi.encodeCall(council.updateVoters, (voters, powers));
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.VoterUpdate, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
 
         // Check new voter added
         assertEq(council.getVoterPower(newVoter), 200);
@@ -260,11 +253,11 @@ contract CouncilExecutionTest is CouncilTest {
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data = abi.encode(voters, powers);
+        bytes memory data = abi.encodeCall(council.updateVoters, (voters, powers));
 
         vm.expectRevert(IGovernanceCouncil.NoVotersRemaining.selector);
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.VoterUpdate, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -287,7 +280,7 @@ contract CouncilExecutionTest is CouncilTest {
         vm.prank(voter2);
         council.voteProposal(proposalId, true);
 
-        bytes memory data = abi.encode(forwarders, authorized);
+        bytes memory data = abi.encodeCall(council.updateProposalForwarders, (forwarders, authorized));
 
         // Expect ProposalForwarderUpdated events
         vm.expectEmit(true, false, false, true);
@@ -296,7 +289,7 @@ contract CouncilExecutionTest is CouncilTest {
         emit IGovernanceCouncil.ProposalForwarderUpdated(forwarder1, false);
 
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.ProposalForwarderUpdate, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
 
         // Check new forwarder added
         assertTrue(council.isProposalForwarder(newForwarder));
@@ -327,9 +320,9 @@ contract CouncilExecutionTest is CouncilTest {
         uint256 receiverBalanceBefore = token.balanceOf(receiver);
         uint256 councilBalanceBefore = token.balanceOf(address(council));
 
-        bytes memory data = abi.encode(receiver, address(token), amount);
+        bytes memory data = abi.encodeCall(council.transferERC20, (address(token), receiver, amount));
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.TokenTransfer, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
 
         assertEq(token.balanceOf(receiver), receiverBalanceBefore + amount);
         assertEq(token.balanceOf(address(council)), councilBalanceBefore - amount);
@@ -348,9 +341,9 @@ contract CouncilExecutionTest is CouncilTest {
         uint256 receiverBalanceBefore = receiver.balance;
         uint256 councilBalanceBefore = address(council).balance;
 
-        bytes memory data = abi.encode(receiver, address(0), amount);
+        bytes memory data = abi.encodeCall(council.transferNative, (receiver, amount));
         vm.prank(voter1);
-        council.executeProposal(proposalId, IGovernanceCouncil.ProposalType.TokenTransfer, address(0), data);
+        council.executeProposal(proposalId, address(council), data);
 
         assertEq(receiver.balance, receiverBalanceBefore + amount);
         assertEq(address(council).balance, councilBalanceBefore - amount);
@@ -359,16 +352,21 @@ contract CouncilExecutionTest is CouncilTest {
     function testNativeTokenTransferGasLimit() public {
         uint256 newGasLimit = 100000;
 
+        // Propose and execute gas limit update via onlySelf
         vm.prank(voter1);
-        council.setNativeTokenTransferGas(newGasLimit);
+        uint256 proposalId = council.createProposal(
+            address(council), abi.encodeCall(council.updateNativeTokenTransferGas, (newGasLimit))
+        );
+
+        vm.prank(voter2);
+        council.voteProposal(proposalId, true);
+
+        vm.prank(voter1);
+        council.executeProposal(
+            proposalId, address(council), abi.encodeCall(council.updateNativeTokenTransferGas, (newGasLimit))
+        );
 
         assertEq(council.nativeTokenTransferGas(), newGasLimit);
-    }
-
-    function testNativeTokenTransferGasLimitNonVoter() public {
-        vm.expectRevert(IGovernanceCouncil.InvalidCaller.selector);
-        vm.prank(nonVoter);
-        council.setNativeTokenTransferGas(100000);
     }
 
     function testReceiveNativeToken() public {

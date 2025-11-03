@@ -2,13 +2,9 @@
 
 pragma solidity ^0.8.20;
 
-import "../IGovernanceCouncil.sol";
+import "../../IGovernanceCouncil.sol";
 
 abstract contract ProposalForwarderBase {
-    // ════════════════════════════════════════════════════════════════════════════════════════
-    //                                             ERRORS
-    // ════════════════════════════════════════════════════════════════════════════════════════
-
     error OnlyInitializerCanInit();
     error CouncilAddressAlreadySet();
 
@@ -16,12 +12,6 @@ abstract contract ProposalForwarderBase {
     address private initializer;
 
     event CouncilInitialized(IGovernanceCouncil council);
-
-    enum Action {
-        Set,
-        Add,
-        Remove
-    }
 
     constructor(address _council, address _initializer) {
         if (_council != address(0)) {

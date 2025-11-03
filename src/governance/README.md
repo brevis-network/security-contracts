@@ -1,10 +1,10 @@
 # Governance Council System
 
-Weighted multi-sig governance with dual thresholds and pluggable proposal forwarders.
+Weighted multi-sig governance with pluggable proposal forwarders.
 
 ## Overview
 
-The contracts implement a simple trust model where council members (voters) can propose and vote on protocol operations. The system features dual thresholds for different security levels and supports extensible proposal forwarders for convenient governance workflows.
+The contracts implement a simple trust model where council members (voters) can propose and vote on protocol operations. It supports extensible proposal forwarders for convenient governance workflows.
 
 > Note: For a minimal, equal‑weight alternative with immutable voters and parameters, see [SimpleCouncil](./simple-council/SimpleCouncil.sol) and [SimpleAdminCouncil](./simple-council/SimpleAdminCouncil.sol).
 
@@ -16,16 +16,8 @@ The main governance contract with these features:
 
 - Weighted voting
 - Multiple proposal types
-- Dual thresholds (quorum / fast-pass) with auto fast-pass detection
+- Quorum-based approvals
 - Reentrancy, deadline, and data-hash safeguards
-
-#### Proposal Types
-
-`External` | `ParamUpdate` | `VoterUpdate` | `ProposalForwarderUpdate` | `FastPassUpdate` | `TokenTransfer`
-
-#### Dual Threshold System
-
-Quorum (e.g. 60%) applies by default; fast-pass (e.g. 40%) applies to pre-authorized external functions, auto-detected at execution.
 
 ### 2. Proposal Forwarder
 
@@ -37,8 +29,8 @@ Trusted helper contracts that create proposals for users. Purely ergonomic: enco
 
 #### Available Abstract Forwarders
 
-`AccessControlForwarder`: ownership + access role management
-`ProxyAdminForwarder`: contract upgrades, proxy admin changes
+- `AccessControlForwarder`: ownership + access role management
+- `ProxyAdminForwarder`: contract upgrades, proxy admin changes
 
 **Example**: Instead of manually encoding proposal calldata, call the forwarder's `proposeGrantRole(target, role, account)`, which handles encoding and emits `GrantRoleProposed(proposalId, target, role, account)`.
 
@@ -51,19 +43,13 @@ Trusted helper contracts that create proposals for users. Purely ergonomic: enco
 The system operates on a **simple trust model**:
 
 1. **Voters**: Trusted council members who can create and vote on proposals
-2. **Proposal Forwarders**: Audited, immutable; type-safe interfaces + decoded events; eliminate manual encoding
-3. **Fast-Pass Authorization**: Pre‑authorized external calls with lower threshold
+2. **Proposal Forwarders**: Audited, immutable; type-safe interfaces + decoded events; eliminate manual encoding; optional convenience layer that doesn’t change required quorum
 
-#### Core Trust Assumption
+**Core Trust Assumption**: _Voters with sufficient power (meeting current quorum threshold) can do whatever they want._ This includes:
 
-**Voters with sufficient power (meeting current quorum threshold) can do whatever they want.** This includes:
-
-- Modifying governance parameters (thresholds, active periods) while other proposals are pending
+- Modifying governance parameters (quorum threshold, active period) while other proposals are pending
 - Changing voter powers or adding/removing voters during active proposal periods  
-- Modifying fast-pass authorizations that affect threshold calculations for pending proposals
 - Any other governance action at any time
-
-**Race Conditions by Design**: Configuration changes during pending proposals are intentional, not bugs. If voters can execute a proposal to change parameters, they already have enough power to execute any other proposal under either the old or new parameters.
 
 ### Security Principles
 
@@ -72,12 +58,6 @@ The system operates on a **simple trust model**:
 3. **Deadline Enforcement**: All proposals have expiration times to prevent stale executions
 4. **Immutable Forwarders**: Proposal forwarders must be non-upgradable to prevent trust issues
 5. **Transparent Forwarding**: Forwarders must pass through the original caller as the proposer
-
-#### Operational Requirements
-
-- **Secure Keys & Review**: Secure voter keys; review proposals before execution
-- **Threshold Configuration**: Set thresholds appropriate for your security model
-- **Fast-Pass Authorization**: Only authorize low-risk operations for fast-pass
 
 ## Usage and Integration
 
@@ -96,7 +76,7 @@ uint256 proposalId = council.createProposal(target, callData);
 council.voteProposal(proposalId, true);
 
 // Execute when threshold met
-council.executeProposal(proposalId, ProposalType.External, target, callData);
+council.executeProposal(proposalId, target, callData);
 ```
 
 ### Through Proposal Forwarders
@@ -111,20 +91,6 @@ forwarder.proposeGrantRole(targetContract, role, account);
 // Automatically emits: GrantRoleProposed(proposalId, targetContract, role, account)
 ```
 
-### Fast-Pass Configuration
-
-Configure operations for expedited processing:
-
-```solidity
-// Authorize function for fast-pass
-address[] memory targets = [targetContract];
-// Use selector bytes4(0) to wildcard all functions on a target
-bytes4[] memory selectors = [MyContract.someFunction.selector];
-bool[] memory authorized = [true];
-
-council.proposeFastPassUpdate(targets, selectors, authorized);
-```
-
 ### Initial Setup
 
 ```solidity
@@ -136,20 +102,16 @@ GovernanceCouncil council = new GovernanceCouncil(
     voters,
     powers, 
     forwarders,
-    7 days,    // active period
-    60,        // quorum threshold (60%)
-    40         // fast-pass threshold (40%)
+    1 days,    // active period
+    60         // quorum threshold (60%)
 );
 ```
-
-**Threshold Examples**: Quorum: 300/500 (60%) → 3 voters. Fast-pass: 200/500 (40%) → 2 voters. Practical: 3 regular, 2 fast-pass.
 
 ### For Protocol Teams
 
 1. **Deploy Council**: Set up voters, powers, and initial forwarders
-2. **Configure Fast-Pass**: Authorize routine operations for efficiency
-3. **Create Custom Forwarders**: Build specialized forwarders for your protocol's needs
-4. **Integrate Access Control**: Use governance for protocol parameter management
+2. **Create Custom Forwarders**: Build specialized forwarders for your protocol's needs
+3. **Integrate Access Control**: Use governance for protocol parameter management
 
 ### For Forwarder Developers
 
@@ -160,6 +122,6 @@ GovernanceCouncil council = new GovernanceCouncil(
 
 ## Testing
 
-Comprehensive unit and integration tests (proposal lifecycle, edge cases, fast-pass logic).
+Comprehensive unit and integration tests (proposal lifecycle and edge cases).
 
 See `/test/governance/README.md` for detailed test documentation.

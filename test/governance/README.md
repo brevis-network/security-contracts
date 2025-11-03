@@ -1,16 +1,15 @@
 # Governance Test Suite
 
-This directory contains tests for the GovernanceCouncil system with **110 tests across 4 test files**.
+This directory contains tests for the GovernanceCouncil system.
 
 ## Test Results Summary
 - **110 Tests Passed** 
 - **0 Tests Failed**## Test Structure
 
 ### Core Test Files
-- **`CouncilTest.sol`** - Foundation Tests (19 tests) - Basic functionality and setup
-- **`CouncilFastPassTest.sol`** - Fast-Pass System (30 tests) - Authorization system
-- **`CouncilExecutionTest.sol`** - Execution & Governance (41 tests) - Full workflow testing
-- **`CouncilForwarderTest.sol`** - Proposal Forwarder (20 tests) - Proposal forwarder contracts
+- **`CouncilTest.t.sol`** - Foundation Tests - Basic functionality and setup
+- **`CouncilExecutionTest.t.sol`** - Execution & Governance - Full workflow testing
+- **`CouncilForwarderTest.t.sol`** - Proposal Forwarder - Proposal forwarder contracts
 
 ## Test Coverage Analysis
 
@@ -24,7 +23,6 @@ This directory contains tests for the GovernanceCouncil system with **110 tests 
 - Parameter update proposals
 - Voter update proposals
 - Forwarder update proposals
-- Fast-pass authorization proposals
 - Token transfer proposals (ERC20 and native)
 - Input validation and error handling
 
@@ -35,23 +33,6 @@ This directory contains tests for the GovernanceCouncil system with **110 tests 
 - Expired proposal handling
 - Vote counting (simple and threshold-based)
 - Data hash correctness verification for proposal integrity
-
-### Fast-Pass System
-- **Reversible bit-packed encoding/decoding**
-  ```solidity
-  // Layout: [64 zero][160 target][32 selector]
-  Target: 0x1234567890AbcdEF1234567890aBcdef12345678
-  Selector: 0xdeadbeef
-  → Encoded: 0x00000000000000001234567890abcdef1234567890abcdef12345678deadbeef
-  → Reversible: Perfect decoding
-  ```
-- Specific function authorizations
-- Wildcard authorizations (bytes4(0))
-- Automatic threshold detection (40% vs 60%)
-- Authorization management (CRUD operations)
-- Specific vs wildcard priority handling
-- Dynamic fast-pass behavior - threshold changes after proposal creation
-- Fast-pass revocation effects - threshold increases when authorizations removed
 
 ### Proposal Execution
 - External calls with success/failure handling
@@ -81,7 +62,6 @@ This directory contains tests for the GovernanceCouncil system with **110 tests 
 ### View Functions
 - Voter enumeration and power queries
 - Vote history tracking
-- Fast-pass authorization queries
 - Forwarder listings
 - Constants and parameters
 
@@ -111,8 +91,6 @@ This directory contains tests for the GovernanceCouncil system with **110 tests 
 ### Voting Power & Thresholds
 - **Total Power**: 175 (100 + 50 + 25)
 - **Quorum Threshold (60%)**: Regular proposals need 105 power
-- **Fast-Pass Threshold (40%)**: Authorized functions need 70 power
-- **Auto-detection**: Function authorization determines threshold
 - **Edge cases**: Exactly at threshold, just below/above threshold
 
 ### Gas Usage Patterns
@@ -120,7 +98,7 @@ This directory contains tests for the GovernanceCouncil system with **110 tests 
 - **Create Proposal**: ~120K gas average
 - **Vote**: ~50K gas average  
 - **Execute**: ~95K gas average
-- **Fast-pass operations**: Efficient bit manipulation
+ 
 
 ## Error Scenarios Tested
 - Invalid selectors (< 4 bytes)
@@ -143,14 +121,13 @@ The tests use several mock contracts to simulate real-world scenarios:
 - **`MockProxyAdmin`**: Proxy admin for upgrade testing
 
 ## Architecture Validation
-- **Enumerable Data**: Fast-pass authorizations queryable
+- **Enumerable Data**: Voters and forwarders enumerable
 - **Modular Design**: Forwarders work independently
 - **Event Emissions**: All state changes logged
 - **Interface Compliance**: Full IGovernanceCouncil implementation
 - **OpenZeppelin Integration**: Proper use of battle-tested libraries
 
 ## Performance Analysis
-- **Most Expensive**: Fast-pass authorization updates (~600K gas)
 - **Most Efficient**: Simple vote counting (~4K gas)
 - **Balanced**: External proposal execution (~95K gas average)
 
@@ -170,7 +147,7 @@ forge test --match-path "test/governance/*" -vv
 forge test --match-path "test/governance/*" --gas-report
 
 # Run specific test function
-forge test --match-test testFastPassThresholdDetection -vv
+forge test --match-test testCountVotesSimple -vv
 ```
 
 ## Test Quality Assessment
@@ -182,15 +159,13 @@ forge test --match-test testFastPassThresholdDetection -vv
 - **Integration Testing**: Cross-component interactions validated
 
 ### Test Strengths
-1. **Fast-Pass Logic**: Complete encoding, authorization, and threshold logic coverage
-2. **Error Handling**: Most revert conditions validated
-3. **State Verification**: Critical state changes properly tested
-4. **Component Integration**: Core components work together correctly
-5. **Gas Awareness**: Performance characteristics documented
-6. **Dynamic Behavior**: Fast-pass threshold changes and authorization effects tested
-7. **Event Verification**: State-changing events properly emitted
-8. **Security Boundaries**: Non-voter access prevention validated
-9. **Data Integrity**: Proposal hash correctness verification implemented
+1. **Error Handling**: Most revert conditions validated
+2. **State Verification**: Critical state changes properly tested
+3. **Component Integration**: Core components work together correctly
+4. **Gas Awareness**: Performance characteristics documented
+5. **Event Verification**: State-changing events properly emitted
+6. **Security Boundaries**: Non-voter access prevention validated
+7. **Data Integrity**: Proposal hash correctness verification implemented
 
 ## Test Philosophy
 
@@ -207,7 +182,7 @@ These tests focus on **functional correctness** and **security validation** whil
 
 When reviewing this test suite, pay particular attention to:
 
-1. **Fast-Pass Authorization Logic**: Complex bit-packing and threshold detection
+1. **Quorum Threshold Logic**: Vote counting and pass/fail boundary conditions
 2. **Reentrancy Protection**: Especially in external call execution
 3. **Access Control Boundaries**: Voter-only restrictions and forwarder validation
 4. **State Consistency**: Proposal lifecycle and vote counting accuracy

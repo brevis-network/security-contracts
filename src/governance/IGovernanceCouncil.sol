@@ -14,9 +14,7 @@ interface IGovernanceCouncil {
 
     error InvalidLength();
     error InvalidActivePeriod();
-    error InvalidInitThresholds();
     error InvalidProposalForwarder();
-    error InvalidProposalType();
     error InvalidThreshold();
     error InvalidCaller();
     error InvalidSelector();
@@ -31,72 +29,33 @@ interface IGovernanceCouncil {
     error NoVotersRemaining();
 
     // ════════════════════════════════════════════════════════════════════════════════════════
-    //                                             ENUMS
-    // ════════════════════════════════════════════════════════════════════════════════════════
-
-    /**
-     * @notice Parameters that can be modified through governance proposals
-     */
-    enum Param {
-        // Duration for which proposals remain active
-        ActivePeriod,
-        // Threshold for proposals to pass
-        QuorumThreshold,
-        // Lower threshold for less critical operations
-        FastPassThreshold
-    }
-
-    /**
-     * @notice Types of proposals supported by the governance system
-     */
-    enum ProposalType {
-        // External contract calls (threshold auto-detected based on fast-pass authorization)
-        External,
-        // Update governance parameters
-        ParamUpdate,
-        // Adding/removing/updating voters
-        VoterUpdate,
-        // Adding/removing proposer proposal forwarder contracts
-        ProposalForwarderUpdate,
-        // Adding/removing fast-pass authorizations
-        FastPassUpdate,
-        // Token transfers from the contract
-        TokenTransfer
-    }
-
-    // ════════════════════════════════════════════════════════════════════════════════════════
     //                                            EVENTS
     // ════════════════════════════════════════════════════════════════════════════════════════
 
     event Initiated(
-        address[] voters,
-        uint256[] powers,
-        address[] forwarders,
-        uint256 activePeriod,
-        uint256 quorumThreshold,
-        uint256 fastPassThreshold
+        address[] voters, uint256[] powers, address[] forwarders, uint256 activePeriod, uint256 quorumThreshold
     );
 
-    event ProposalCreated(
-        uint256 proposalId, ProposalType proposalType, address target, bytes data, uint256 deadline, address proposer
-    );
+    // Intentionally keep event fields unindexed (see README and interface docs) for readability and gas
+    event ProposalCreated(uint256 proposalId, address target, bytes data, uint256 deadline, address proposer);
     event ProposalVoted(uint256 proposalId, address voter, bool vote);
     event ProposalExecuted(uint256 proposalId);
 
-    event ParamUpdateProposed(uint256 proposalId, Param name, uint256 value);
+    // Parameter proposals (split by field)
+    event ActivePeriodUpdateProposed(uint256 proposalId, uint256 newActivePeriod);
+    event QuorumThresholdUpdateProposed(uint256 proposalId, uint256 newQuorumThreshold);
     event VoterUpdateProposed(uint256 proposalId, address[] voters, uint256[] powers);
     event ProposalForwarderUpdateProposed(uint256 proposalId, address[] addrs, bool[] ops);
-    event FastPassUpdateProposed(uint256 proposalId, address[] targets, bytes4[] selectors, bool[] authorized);
     event TokenTransferProposed(uint256 proposalId, address receiver, address token, uint256 amount);
-    event NativeTokenTransferGasUpdated(uint256 oldGas, uint256 newGas);
+    event NativeTokenTransferGasUpdateProposed(uint256 proposalId, uint256 newGasLimit);
 
     // Execution-time granular state change events
     event ProposalForwarderUpdated(address forwarder, bool authorized);
-    event FastPassAuthorizationUpdated(address target, bytes4 selector, bool authorized);
-    event ParamUpdated(Param name, uint256 oldValue, uint256 newValue);
+    event ActivePeriodUpdated(uint256 oldValue, uint256 newValue);
+    event QuorumThresholdUpdated(uint256 oldValue, uint256 newValue);
     event VoterUpdated(address voter, uint256 oldPower, uint256 newPower); // newPower == 0 => removed
     event TokenTransferred(address receiver, address token, uint256 amount);
-    event ExternalCallExecuted(address target, bytes4 selector);
+    event NativeTokenTransferGasUpdated(uint256 oldGas, uint256 newGas);
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                   PROPOSAL CREATION FUNCTIONS
@@ -122,12 +81,18 @@ interface IGovernanceCouncil {
         returns (uint256 proposalId);
 
     /**
-     * @notice Creates a proposal to change a governance parameter
-     * @param _name The parameter to change
-     * @param _value The new value for the parameter
+     * @notice Creates a proposal to update the Active Period
+     * @param _newActivePeriod New active period in seconds (must be within [MIN_ACTIVE_PERIOD, MAX_ACTIVE_PERIOD])
      * @return proposalId The ID of the created proposal
      */
-    function proposeParamUpdate(Param _name, uint256 _value) external returns (uint256 proposalId);
+    function proposeActivePeriodUpdate(uint256 _newActivePeriod) external returns (uint256 proposalId);
+
+    /**
+     * @notice Creates a proposal to update the Quorum Threshold (0 < threshold < 100)
+     * @param _newQuorumThreshold New quorum threshold (percentage out of 100)
+     * @return proposalId The ID of the created proposal
+     */
+    function proposeQuorumThresholdUpdate(uint256 _newQuorumThreshold) external returns (uint256 proposalId);
 
     /**
      * @notice Creates a proposal to update voter addresses and their voting powers
@@ -148,19 +113,6 @@ interface IGovernanceCouncil {
     function proposeProposalForwarderUpdate(address[] calldata _addrs, bool[] calldata _authorized)
         external
         returns (uint256 proposalId);
-
-    /**
-     * @notice Creates a proposal to add or remove fast-pass authorizations
-     * @param _targets Array of target contract addresses
-     * @param _selectors Array of function selectors (use bytes4(0) for all functions)
-     * @param _authorized Array of authorization status (true = authorize, false = revoke)
-     * @return proposalId The ID of the created proposal
-     */
-    function proposeFastPassUpdate(
-        address[] calldata _targets,
-        bytes4[] calldata _selectors,
-        bool[] calldata _authorized
-    ) external returns (uint256 proposalId);
 
     /**
      * @notice Creates a proposal to transfer tokens from the contract
@@ -202,17 +154,11 @@ interface IGovernanceCouncil {
      * @param _target The target contract address (must match the original)
      * @param _data The encoded function call data (must match the original)
      */
-    function executeProposal(uint256 _proposalId, ProposalType _type, address _target, bytes calldata _data) external;
-
-    // ════════════════════════════════════════════════════════════════════════════════════════
-    //                                   CONFIGURATION FUNCTIONS
-    // ════════════════════════════════════════════════════════════════════════════════════════
-
     /**
-     * @notice Sets the gas limit for native token transfers to prevent griefing attacks
-     * @param _gasUsed The gas limit to use for native token transfers
+     * @notice Executes a proposal if it has sufficient votes and is still active
+     *         Threshold selection: always uses quorumThreshold.
      */
-    function setNativeTokenTransferGas(uint256 _gasUsed) external;
+    function executeProposal(uint256 _proposalId, address _target, bytes calldata _data) external;
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                        VIEW FUNCTIONS
@@ -248,22 +194,15 @@ interface IGovernanceCouncil {
      * @return totalPower The total voting power of all voters
      * @return yesVotes The total voting power of "yes" votes
      */
-    function countVotes(uint256 _proposalId) external view returns (uint256 totalPower, uint256 yesVotes);
 
     /**
-     * @notice Counts the votes for a proposal and determines if it passes
+     * @notice Counts the votes for a proposal and determines if it passes, using a single quorum threshold
      * @param _proposalId The ID of the proposal to count votes for
-     * @param _type The type of the proposal (affects threshold calculation)
-     * @param _target The target contract address (only used for External proposals)
-     * @param _selector The function selector (only used for External proposals)
      * @return totalPower The total voting power of all voters
      * @return yesVotes The total voting power of "yes" votes
      * @return pass Whether the proposal has enough votes to pass
      */
-    function countVotes(uint256 _proposalId, ProposalType _type, address _target, bytes4 _selector)
-        external
-        view
-        returns (uint256 totalPower, uint256 yesVotes, bool pass);
+    function countVotes(uint256 _proposalId) external view returns (uint256 totalPower, uint256 yesVotes, bool pass);
 
     // ════════════════════════════════════════════════════════════════════════════════════════
     //                                        STATE VARIABLES
@@ -287,7 +226,10 @@ interface IGovernanceCouncil {
     /**
      * @notice Mapping of parameter names to their current values
      */
-    function params(Param) external view returns (uint256);
+    // Individual parameter getters
+    function activePeriod() external view returns (uint256);
+
+    function quorumThreshold() external view returns (uint256);
 
     /**
      * @notice Counter for generating unique proposal IDs
@@ -306,20 +248,6 @@ interface IGovernanceCouncil {
      * @return forwarders Array of all trusted proposal forwarder addresses
      */
     function getProposalForwarders() external view returns (address[] memory forwarders);
-
-    /**
-     * @notice Checks if a specific function on a target is authorized for fast-pass
-     * @param _target The target contract address
-     * @param _selector The function selector (use bytes4(0) to check for wildcard)
-     * @return isAuthorized True if the function is authorized for fast-pass
-     */
-    function isFastPassAuthorized(address _target, bytes4 _selector) external view returns (bool isAuthorized);
-
-    /**
-     * @notice Returns all fast-pass authorization keys (packed target+selector)
-     * @return authKeys Array of all authorization keys (bytes32 packed: high 160 bits target, low 32 bits selector)
-     */
-    function getFastPassAuthorizations() external view returns (bytes32[] memory authKeys);
 
     /**
      * @notice Gas limit for native token transfers to prevent griefing attacks

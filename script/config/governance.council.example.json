@@ -15,6 +15,5 @@
         "0x0000000000000000000000000000000000000000"
     ],
     "activePeriod": 86400,
-    "quorumThreshold": 60,
-    "fastPassThreshold": 40
+    "quorumThreshold": 60
 }

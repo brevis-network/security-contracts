@@ -16,5 +16,6 @@ exclude_lints = [
     "unaliased-plain-import",
     "mixed-case-function",
     "screaming-snake-case-const",
+    "screaming-snake-case-immutable",
     "erc20-unchecked-transfer",
 ]
